@@ -30,7 +30,6 @@
                 <div class="string-handle" id="stringHandle" aria-label="Tirar de la cuerda"></div>
             </div>
             <div class="prompt">
-                <span>Tira de la cuerda para encender</span>
                 <i></i>
             </div>
         </section>
@@ -74,7 +73,7 @@
             <div class="catalog-left">
                 <div id="nav-admin-catalogo"></div>
                 <div>
-                    <h1>🎵 Academia de Música - Catálogo Público</h1>
+                    <h1>🎵 Academia de Música - Catálogo</h1>
                     <p>Préstamos, Inventario y Reservas Virtuales</p>
                 </div>
             </div>
@@ -304,7 +303,6 @@
                                 <input type="password" id="tarj-cvv" inputmode="numeric" placeholder="•••" maxlength="3" autocomplete="cc-csc">
                             </div>
                         </div>
-                        <p class="nota">🔒 Los datos se validan en tu navegador y no se guardan. Demostración: no se realiza ningún cobro real.</p>
                     </div>
 
                     <!-- Pago por QR -->
@@ -397,10 +395,9 @@
     <div id="modal-qr-admin" class="modal-overlay">
         <div class="modal-box">
             <h3>🔳 Código QR de pagos</h3>
-            <p class="nota">Este QR es el que verán los usuarios al elegir "Pago por QR".</p>
+
             <div class="qr-admin-caja">
                 <img id="qr-admin-preview" class="qr-admin-img" alt="QR de pagos" hidden>
-                <p id="qr-admin-aviso" class="nota"></p>
             </div>
             <label for="qr-archivo">Subir foto del QR:</label>
             <input type="file" id="qr-archivo" accept="image/*">
