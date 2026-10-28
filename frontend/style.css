@@ -729,3 +729,57 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   .decoracion, .nota-fondo, .nota-fondo b, .nota-3d, .nota-3d b, .anillo,
   .ecualizador i, .instrument-img.sin-foto span, .btn-confirmar { animation: none; }
 }
+
+
+/* =====================================================================
+   AJUSTES PARA CELULAR  (el escritorio no cambia)
+   ===================================================================== */
+
+/* Login: la lámpara arriba y la tarjeta abajo */
+@media (max-width: 800px) {
+  .room { flex-direction: column; height: auto; min-height: 100vh; min-height: 100dvh; overflow-x: hidden; overflow-y: auto; }
+  .room-light { left: 50%; margin-left: -500px; }
+  .lamp-side { flex: none; height: 330px; }
+  .lamp-container { transform: scale(0.72); }
+  .prompt { top: 12px; left: 50%; font-size: 14px; }
+  .login-side { flex: 1 0 auto; padding: 0 16px 36px; align-items: flex-start; }
+  .login-card { padding: 28px 22px; gap: 18px; max-width: 420px; transform: translateY(30px); }
+  .room.on .login-card { transform: none; }
+  .login-heading h2 { font-size: 26px; }
+}
+
+/* Catálogo y administrador */
+@media (max-width: 700px) {
+  #vista-catalogo, #vista-admin { overflow-x: hidden; overflow-x: clip; }
+
+  .hero { flex-direction: column; text-align: center; gap: 0.25rem; }
+  .hero-texto { min-width: 0; }
+  .ecualizador { justify-content: center; }
+  .escena-3d { margin: -10px 0 -20px; }
+
+  .admin-bar { padding: 0.6rem 0.8rem; gap: 8px; }
+  .admin-bar-left { gap: 8px; }
+  .admin-bar .btn { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+  .btn-titulo-admin { font-size: 0.85rem; padding: 0.3rem 0.4rem; }
+  .menu-admin { left: 0.5rem; right: 0.5rem; min-width: 0; }
+
+  .modal-box { padding: 1.2rem; }
+  #toast-container { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+
+  /* Las tablas se vuelven tarjetas: cada fila es una tarjeta con sus datos y su botón a la vista */
+  .tabla-cards thead { display: none; }
+  .tabla-cards, .tabla-cards tbody, .tabla-cards tr, .tabla-cards td { display: block; width: 100%; }
+  .tabla-cards tr {
+    border: 1px solid #e3e6ee; border-radius: 12px; background: #fff;
+    padding: 6px 12px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(124, 92, 255, 0.08);
+  }
+  .tabla-cards td {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 8px 0; border-bottom: 1px dashed #e8e8ee; text-align: right;
+  }
+  .tabla-cards td:last-child { border-bottom: none; }
+  .tabla-cards td::before { content: attr(data-label); font-weight: 700; color: #6b7280; text-align: left; flex-shrink: 0; }
+  .tabla-cards td:not([data-label]) { display: block; text-align: center; }
+  .tabla-cards td:not([data-label])::before { display: none; }
+  .tabla-cards .fila-estado { max-width: 190px; }
+}

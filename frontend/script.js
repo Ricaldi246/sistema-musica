@@ -762,14 +762,14 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
 
         const fila = document.createElement('tr');
         fila.innerHTML = `
-            <td><button class="btn btn-danger btn-sm" onclick="eliminarInstrumento(${Number(item.id)}, this)">🗑️</button></td>
-            <td>${Number(item.id)}</td>
-            <td>${foto}</td>
-            <td>${esc(item.nombre)}</td>
-            <td>${esc(item.tipo)}</td>
-            <td>${esc(item.numero_serie)}</td>
-            <td><select class="fila-estado" onchange="cambiarEstadoInstrumento(${Number(item.id)}, this.value)">${opciones}</select></td>
-            <td>${disponibilidad}</td>
+            <td data-label="Eliminar"><button class="btn btn-danger btn-sm" onclick="eliminarInstrumento(${Number(item.id)}, this)">🗑️</button></td>
+            <td data-label="ID">${Number(item.id)}</td>
+            <td data-label="Foto">${foto}</td>
+            <td data-label="Instrumento">${esc(item.nombre)}</td>
+            <td data-label="Tipo">${esc(item.tipo)}</td>
+            <td data-label="N° de serie">${esc(item.numero_serie)}</td>
+            <td data-label="Estado físico"><select class="fila-estado" onchange="cambiarEstadoInstrumento(${Number(item.id)}, this.value)">${opciones}</select></td>
+            <td data-label="Disponibilidad">${disponibilidad}</td>
         `;
         tbody.appendChild(fila);
     });
@@ -963,8 +963,8 @@ async function cargarPrestamosYDevoluciones() {
     prestamosCache.forEach((p) => {
         const activo = p.estado === 'Activo';
         const celdaCronometro = activo
-            ? `<td class="cronometro" data-salida="${esc(p.fecha_prestamo)}" data-limite="${esc(p.fecha_devolucion_limite)}">…</td>`
-            : `<td>Devuelto el<br>${verFecha(p.fecha_devolucion_real)}</td>`;
+            ? `<td class="cronometro" data-label="Cronómetro" data-salida="${esc(p.fecha_prestamo)}" data-limite="${esc(p.fecha_devolucion_limite)}">…</td>`
+            : `<td data-label="Cronómetro">Devuelto el<br>${verFecha(p.fecha_devolucion_real)}</td>`;
 
         const detalleMulta = (!activo && (p.multa_retraso || p.multa_dano))
             ? `<br><small>Retraso: ${moneda(p.multa_retraso)}<br>Daño (${esc(p.nivel_dano)}): ${moneda(p.multa_dano)}</small>`
@@ -977,13 +977,13 @@ async function cargarPrestamosYDevoluciones() {
 
         const fila = document.createElement('tr');
         fila.innerHTML = `
-            <td>${Number(p.id)}</td>
-            <td>${esc(p.nombre || '(instrumento eliminado)')}${p.es_virtual ? '<br><small>🌐 Reserva virtual</small>' : ''}</td>
-            <td>${esc(p.solicitante)}</td>
-            <td>Salida: ${verFecha(p.fecha_prestamo)}<br>Límite: ${verFecha(p.fecha_devolucion_limite)}</td>
+            <td data-label="ID">${Number(p.id)}</td>
+            <td data-label="Instrumento">${esc(p.nombre || '(instrumento eliminado)')}${p.es_virtual ? '<br><small>🌐 Reserva virtual</small>' : ''}</td>
+            <td data-label="Solicitante">${esc(p.solicitante)}</td>
+            <td data-label="Salida / Límite">Salida: ${verFecha(p.fecha_prestamo)}<br>Límite: ${verFecha(p.fecha_devolucion_limite)}</td>
             ${celdaCronometro}
-            <td><strong>${moneda(p.multa)}</strong>${detalleMulta}</td>
-            <td>${acciones}</td>
+            <td data-label="Multa"><strong>${moneda(p.multa)}</strong>${detalleMulta}</td>
+            <td data-label="Acción">${acciones}</td>
         `;
         tbody.appendChild(fila);
     });

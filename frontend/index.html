@@ -30,7 +30,7 @@
                 <div class="string-handle" id="stringHandle" aria-label="Tirar de la cuerda"></div>
             </div>
             <div class="prompt">
-                <span></span>
+                <span>Tira de la cuerda para encender</span>
                 <i></i>
             </div>
         </section>
@@ -74,7 +74,7 @@
             <div class="catalog-left">
                 <div id="nav-admin-catalogo"></div>
                 <div>
-                    <h1>🎵 Academia de Música - Catálogo</h1>
+                    <h1>🎵 Academia de Música - Catálogo Público</h1>
                     <p>Préstamos, Inventario y Reservas Virtuales</p>
                 </div>
             </div>
@@ -84,7 +84,7 @@
         <main>
             <section class="hero">
                 <div class="hero-texto">
-                    <h2>Instrumentos de la academia</h2>
+                    <h2>Instrumentos Registrados en la Academia</h2>
                     <p>Explora nuestro catálogo en tiempo real y reserva el instrumento que necesites.</p>
                     <div class="ecualizador" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
                 </div>
@@ -164,7 +164,7 @@
                 <div class="card">
                     <h2>2. Almacenamiento e Inventario General</h2>
                     <div class="tabla-scroll">
-                        <table>
+                        <table class="tabla-cards">
                             <thead>
                                 <tr><th>🗑️</th><th>ID</th><th>Foto</th><th>Instrumento</th><th>Tipo</th><th>N° de Serie</th><th>Estado Físico</th><th>Disponibilidad</th></tr>
                             </thead>
@@ -221,7 +221,7 @@
                 <div class="card">
                     <h2>4. Control de Devoluciones y Cronómetro</h2>
                     <div class="tabla-scroll">
-                        <table>
+                        <table class="tabla-cards">
                             <thead>
                                 <tr><th>ID</th><th>Instrumento</th><th>Solicitante</th><th>Salida / Límite</th><th>Cronómetro</th><th>Multa</th><th>Acción</th></tr>
                             </thead>
@@ -300,7 +300,7 @@
                                 <input type="text" id="tarj-vence" inputmode="numeric" placeholder="MM/AA" maxlength="5" autocomplete="cc-exp">
                             </div>
                             <div>
-                                <label for="tarj-cvv">CVV (código de seguridad):</label>
+                                <label for="tarj-cvv">CVV (seguridad):</label>
                                 <input type="password" id="tarj-cvv" inputmode="numeric" placeholder="•••" maxlength="3" autocomplete="cc-csc">
                             </div>
                         </div>
@@ -397,8 +397,10 @@
     <div id="modal-qr-admin" class="modal-overlay">
         <div class="modal-box">
             <h3>🔳 Código QR de pagos</h3>
+            <p class="nota">Este QR es el que verán los usuarios al elegir "Pago por QR".</p>
             <div class="qr-admin-caja">
                 <img id="qr-admin-preview" class="qr-admin-img" alt="QR de pagos" hidden>
+                <p id="qr-admin-aviso" class="nota"></p>
             </div>
             <label for="qr-archivo">Subir foto del QR:</label>
             <input type="file" id="qr-archivo" accept="image/*">
