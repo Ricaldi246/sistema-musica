@@ -3,343 +3,423 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Gestión - Academia de Música</title>
+    <title>Sistema de Gestión y Catálogo - Academia de Música</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <!-- Librería Three.js para las animaciones 3D -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <style>
-        /* Estilos corregidos para que el menú se despliegue por completo y por encima de todo */
-        .header-content {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: relative;
-            z-index: 10;
-            padding: 0 1rem;
-        }
-        header {
-            overflow: visible !important; /* Permite que el menú sobresalga del header si es necesario */
-        }
-        .menu-container {
-            position: relative;
-            z-index: 100;
-        }
-        .btn-hamburguesa {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            color: white;
-            font-size: 1.5rem;
-            padding: 0.4rem 0.7rem;
-            border-radius: 4px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .btn-hamburguesa span {
-            display: block;
-            width: 22px;
-            height: 2px;
-            background-color: white;
-        }
-        .dropdown-menu {
-            display: none;
-            position: absolute;
-            top: 130%;
-            left: 0;
-            background: white;
-            color: #333;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-            border-radius: 6px;
-            overflow: hidden;
-            z-index: 1000;
-            min-width: 250px;
-        }
-        .dropdown-menu.activo {
-            display: block;
-        }
-        .dropdown-menu button {
-            width: 100%;
-            padding: 0.85rem 1rem;
-            text-align: left;
-            background: none;
-            border: none;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-            font-size: 0.95rem;
-            color: #333;
-            transition: background 0.2s;
-            white-space: nowrap;
-        }
-        .dropdown-menu button:hover {
-            background: #f0f2f5;
-            color: #e67e22;
-            font-weight: bold;
-        }
-        #cubo-3d-derecha {
-            width: 70px;
-            height: 70px;
-            cursor: grab;
-        }
-    </style>
 </head>
 <body>
-    <header style="position: relative;">
-        <!-- Lienzo para el fondo animado general -->
-        <div id="canvas-3d-header" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none;"></div>
-        
-        <div class="header-content">
-            <!-- Menú Desplegable Hamburguesa (Izquierda) -->
-            <div class="menu-container">
-                <button class="btn-hamburguesa" onclick="toggleMenu()" title="Menú de Navegación">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </button>
-                <div id="menu-desplegable" class="dropdown-menu">
-                    <button onclick="irAPanelDesdeMenu(0)">📌 1. Registrar Instrumento</button>
-                    <button onclick="irAPanelDesdeMenu(1)">📦 2. Inventario General</button>
-                    <button onclick="irAPanelDesdeMenu(2)">📝 3. Registro de Préstamos</button>
-                    <button onclick="irAPanelDesdeMenu(3)">⏱️ 4. Control y Sanciones</button>
-                </div>
-            </div>
+    <!-- ===================== LOGIN (LÁMPARA) ===================== -->
+    <main class="room" id="room">
+        <div class="room-light" id="roomLight"></div>
+        <div class="fireflies" id="fireflies"></div>
 
-            <!-- Título Central -->
-            <div style="text-align: center; flex: 1; margin: 0 1rem;">
-                <h1>🎵 Sistema de Gestión - Academia de Música</h1>
-                <p>Control de Activos, Préstamos y Sanciones</p>
-            </div>
+        <section class="lamp-side">
+            <div class="lamp-container" id="lampContainer">
+                <div class="lamp-glow"></div>
+                <div class="lamp-head"></div>
+                <div class="light-beam"></div>
+                <div class="lamp-stem"></div>
+                <div class="lamp-base"></div>
 
-            <!-- Cubo 3D Interactivo (Derecha) -->
-            <div id="cubo-3d-derecha" title="¡Arrastra o mueve para girar el cubo!"></div>
-        </div>
-    </header>
+                <svg class="string-svg" aria-hidden="true">
+                    <path id="stringPath" d="M 0 0 L 0 80"></path>
+                </svg>
 
-    <main class="container-slider">
-        <!-- Panel 1: Registrar Nuevo Instrumento -->
-        <section class="panel activo" id="panel-1">
-            <div class="card">
-                <h2>1. Registrar Nuevo Instrumento</h2>
-                <form id="form-instrumento">
-                    <input type="text" id="nombre-instrumento" placeholder="Nombre (ej. Guitarra Clásica)" required>
-                    <input type="text" id="tipo-instrumento" placeholder="Tipo (ej. Cuerda, Viento, Percusión)" required>
-                    <input type="text" id="num-serie" placeholder="Número de serie único" required>
-                    <select id="estado-fisico" required>
-                        <option value="">Seleccione estado físico inicial</option>
-                        <option value="Óptimo">Óptimo</option>
-                        <option value="Desgaste regular">Desgaste regular</option>
-                        <option value="En reparación">En reparación</option>
-                    </select>
-                    <button type="submit">Guardar Instrumento</button>
-                </form>
+                <div class="string-handle" id="stringHandle" aria-label="Tirar de la cuerda"></div>
             </div>
-            <button class="btn-flecha right" onclick="cambiarPanel(1)">Ver Almacenamiento ➔</button>
+            <div class="prompt">
+                <span></span>
+                <i></i>
+            </div>
         </section>
 
-        <!-- Panel 2: Almacenamiento e Inventario General con Buscador -->
-        <section class="panel" id="panel-2">
-            <button class="btn-flecha left" onclick="cambiarPanel(0)">⬅️ Registrar</button>
-            <div class="card">
-                <h2>2. Almacenamiento e Inventario General</h2>
-                
-                <div style="margin-bottom: 1rem;">
-                    <input type="text" id="buscador-inventario" placeholder="🔍 Buscar por nombre o número de serie..." style="width: 100%; padding: 0.5rem; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px;">
+        <section class="login-side">
+            <form class="glass login-card" id="form-login" onsubmit="ejecutarLogin(event)">
+                <div class="glass-line"></div>
+
+                <div class="login-heading">
+                    <h2>Academia de Música</h2>
+                    <p>Ingresa tus credenciales para acceder</p>
                 </div>
 
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>🗑️</th>
-                                <th>ID</th>
-                                <th>Instrumento</th>
-                                <th>Tipo</th>
-                                <th>N° de Serie</th>
-                                <th>Estado Físico</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-instrumentos"></tbody>
-                    </table>
+                <div class="inputs">
+                    <label class="input-wrap">
+                        <span class="input-icon mail-icon" aria-hidden="true"></span>
+                        <input type="email" id="login-email" placeholder="Correo electrónico" autocomplete="email" required>
+                    </label>
+
+                    <label class="input-wrap">
+                        <span class="input-icon lock-icon" aria-hidden="true"></span>
+                        <input type="password" id="login-password" placeholder="Contraseña" autocomplete="current-password" required>
+                    </label>
                 </div>
-            </div>
-            <button class="btn-flecha right" onclick="cambiarPanel(2)">Ir a Préstamos ➔</button>
-        </section>
 
-        <!-- Panel 3: Registro de Préstamos y Validación -->
-        <section class="panel" id="panel-3">
-            <button class="btn-flecha left" onclick="cambiarPanel(1)">⬅️ Almacenamiento</button>
-            <div class="card">
-                <h2>3. Registro de Préstamos y Verificación de Identidad</h2>
-                <form id="form-prestamo">
-                    <select id="select-instrumento-prestamo" required>
-                        <option value="">Seleccione un instrumento disponible</option>
-                    </select>
-                    <input type="text" id="solicitante-prestamo" placeholder="Nombre del Alumno o Profesor" required>
-                    <input type="text" id="clase-evento" placeholder="Clase o Evento (ej. Ensayo Orquesta)" required>
-                    <label style="font-size: 0.9rem; color: #555;">Fecha y Hora de Salida:</label>
-                    <input type="datetime-local" id="fecha-prestamo" required>
-                    <label style="font-size: 0.9rem; color: #555;">Fecha y Hora Límite de Devolución:</label>
-                    <input type="datetime-local" id="fecha-limite" required>
-                    
-                    <div style="margin: 10px 0; display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-start;">
-                        <div>
-                            <label style="font-size: 0.85rem; color: #333; font-weight: bold; display: block; margin-bottom: 3px;">Firma Digital:</label>
-                            <canvas id="canvas-firma" width="220" height="100" style="border: 2px dashed #bbb; background: #fafafa; cursor: crosshair; border-radius: 4px; display: block; margin-bottom: 3px;"></canvas>
-                            <button type="button" id="btn-limpiar-firma" style="background-color: #e74c3c; color: white; border: none; padding: 0.2rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">Borrar Firma</button>
-                        </div>
-                        <div style="flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 8px;">
-                            <label style="font-size: 0.85rem; color: #333; font-weight: bold;">Datos si no puede firmar:</label>
-                            <input type="text" id="ci-solicitante" placeholder="N° de Carnet de Identidad (CI)" style="margin-bottom: 0; padding: 0.4rem; font-size: 0.9rem;">
-                            <input type="text" id="telefono-solicitante" placeholder="Teléfono de contacto" style="margin-bottom: 0; padding: 0.4rem; font-size: 0.9rem;">
-                            <small style="color: #666; font-size: 0.75rem;">Úsese en caso de ausencia de firma táctil.</small>
-                        </div>
-                    </div>
+                <button class="sign-in" type="submit">Iniciar Sesión</button>
 
-                    <button type="submit" style="background-color: #e67e22; color: white; margin-top: 5px;">Registrar Préstamo</button>
-                </form>
-            </div>
-            <button class="btn-flecha right" onclick="cambiarPanel(3)">Ver Sanciones y Cronómetro ➔</button>
-        </section>
-
-        <!-- Panel 4: Control de Devoluciones y Cronómetro -->
-        <section class="panel" id="panel-4">
-            <button class="btn-flecha left" onclick="cambiarPanel(2)">⬅️ Préstamos</button>
-            <div class="card">
-                <h2>4. Control de Devoluciones y Cronómetro de Sanciones</h2>
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Instrumento</th>
-                                <th>Solicitante / Validación</th>
-                                <th>Salida / Límite</th>
-                                <th>Cronómetro / Estado</th>
-                                <th>Multa Estimada ($)</th>
-                                <th>Acción / Devolución</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-devoluciones"></tbody>
-                    </table>
-                </div>
-                <p style="margin-top: 1rem;"><small>Estado del servidor: <span id="estado-servidor" style="color: green; font-weight: bold;">Conectando...</span></small></p>
-            </div>
+                <p class="login-register">
+                    ¿No tienes cuenta? <a href="#" onclick="abrirModal('modal-registro'); return false;">Regístrate aquí</a>
+                </p>
+            </form>
         </section>
     </main>
 
-    <!-- Scripts de Animaciones 3D y Menú Hamburguesa -->
-    <script>
-        // Funciones del menú desplegable
-        function toggleMenu() {
-            const menu = document.getElementById('menu-desplegable');
-            menu.classList.toggle('activo');
-        }
+    <!-- Fondo claro con notas musicales flotantes (catálogo y admin) -->
+    <div id="decoracion" class="decoracion" aria-hidden="true" hidden></div>
 
-        function irAPanelDesdeMenu(indice) {
-            cambiarPanel(indice);
-            document.getElementById('menu-desplegable').classList.remove('activo');
-        }
+    <!-- ===================== CATÁLOGO ===================== -->
+    <div id="vista-catalogo" style="display: none;">
+        <header class="catalog-header">
+            <div class="catalog-left">
+                <div id="nav-admin-catalogo"></div>
+                <div>
+                    <h1>🎵 Academia de Música - Catálogo</h1>
+                    <p>Préstamos, Inventario y Reservas Virtuales</p>
+                </div>
+            </div>
+            <div id="auth-nav" class="auth-nav"></div>
+        </header>
 
-        // Cerrar menú al hacer clic fuera
-        window.addEventListener('click', (e) => {
-            if (!e.target.closest('.menu-container')) {
-                const menu = document.getElementById('menu-desplegable');
-                if (menu) menu.classList.remove('activo');
-            }
-        });
+        <main>
+            <section class="hero">
+                <div class="hero-texto">
+                    <h2>Instrumentos de la academia</h2>
+                    <p>Explora nuestro catálogo en tiempo real y reserva el instrumento que necesites.</p>
+                    <div class="ecualizador" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                </div>
+                <div class="escena-3d" aria-hidden="true">
+                    <div class="anillo-wrap">
+                        <div class="anillo">
+                            <span class="cara" style="--i:0; --c:#ffe08a">🎸</span>
+                            <span class="cara" style="--i:1; --c:#ffb3c1">🎹</span>
+                            <span class="cara" style="--i:2; --c:#a8e6cf">🥁</span>
+                            <span class="cara" style="--i:3; --c:#b5d8ff">🎻</span>
+                            <span class="cara" style="--i:4; --c:#d9c2ff">🎺</span>
+                            <span class="cara" style="--i:5; --c:#ffd6a5">🎷</span>
+                        </div>
+                    </div>
+                    <span class="nota-3d n1" style="--c:#ff6b6b"><b>♪</b></span>
+                    <span class="nota-3d n2" style="--c:#7c5cff"><b>♫</b></span>
+                    <span class="nota-3d n3" style="--c:#06b6d4"><b>♬</b></span>
+                </div>
+            </section>
+            <div id="grid-instrumentos" class="catalog-grid"></div>
+        </main>
+    </div>
 
-        // 1. Animación 3D de fondo en la cabecera
-        const contenedor3D = document.getElementById('canvas-3d-header');
-        if (contenedor3D) {
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, contenedor3D.clientWidth / contenedor3D.clientHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-            
-            renderer.setSize(contenedor3D.clientWidth, contenedor3D.clientHeight);
-            contenedor3D.appendChild(renderer.domElement);
+    <!-- ===================== PANEL ADMINISTRADOR ===================== -->
+    <div id="vista-admin" style="display: none;">
+        <div class="admin-bar">
+            <div class="admin-bar-left">
+                <button id="btn-hamburguesa" class="btn-hamburguesa" onclick="toggleMenuAdmin()"
+                        aria-label="Menú de paneles" aria-expanded="false" aria-controls="menu-admin">☰</button>
+                <button class="btn-titulo-admin" onclick="volverAlCatalogo()" title="Ir al catálogo">⚙️ PÁGINA DEL ADMINISTRADOR</button>
+                <button class="btn btn-dark" onclick="abrirBandejaAdmin()">
+                    ✉️ Bandeja de Préstamos (<span id="contador-bandeja">0</span>)
+                </button>
+                <button class="btn btn-dark btn-qr" onclick="abrirModalQrAdmin()" title="Subir o mostrar el QR de pagos">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zM6 6h2v2H6V6zM13 3h8v8h-8V3zm2 2v4h4V5h-4zM16 6h2v2h-2V6zM3 13h8v8H3v-8zm2 2v4h4v-4H5zM6 16h2v2H6v-2zM13 13h3v3h-3zM18 13h3v3h-3zM13 18h3v3h-3zM18 18h3v3h-3z"/></svg>
+                    QR de pagos
+                </button>
+                <button class="btn btn-dark" onclick="abrirModalPassword()" title="Cambiar mi contraseña">🔑 Contraseña</button>
+            </div>
+            <button class="btn btn-light" onclick="cerrarSesionAdmin()">Cerrar Sesión Admin</button>
 
-            const grupoGeometrias = new THREE.Group();
-            const geometriaCuboFondo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-            const geometriaEsfera = new THREE.SphereGeometry(0.8, 16, 16);
-            const materialFondo = new THREE.MeshNormalMaterial({ wireframe: true });
+            <nav id="menu-admin" class="menu-admin" aria-label="Paneles del administrador">
+                <button class="activo" onclick="cambiarPanel(0)">1. Registro de instrumentos</button>
+                <button onclick="cambiarPanel(1)">2. Almacén e inventario general</button>
+                <button onclick="cambiarPanel(2)">3. Registro de préstamos</button>
+                <button onclick="cambiarPanel(3)">4. Control de devoluciones y cronómetro</button>
+            </nav>
+        </div>
 
-            for (let i = 0; i < 10; i++) {
-                const mesh = new THREE.Mesh(i % 2 === 0 ? geometriaCuboFondo : geometriaEsfera, materialFondo);
-                mesh.position.set(
-                    (Math.random() - 0.5) * 30,
-                    (Math.random() - 0.5) * 5,
-                    (Math.random() - 0.5) * 10 - 5
-                );
-                grupoGeometrias.add(mesh);
-            }
-            scene.add(grupoGeometrias);
-            camera.position.z = 8;
+        <div class="container-slider">
+            <!-- Panel 1: registrar instrumento -->
+            <section class="panel activo" id="panel-1">
+                <div class="card">
+                    <h2>1. Registrar Nuevo Instrumento</h2>
+                    <form id="form-instrumento">
+                        <input type="text" id="nombre-instrumento" placeholder="Nombre (ej. Guitarra Clásica)" required>
+                        <input type="text" id="tipo-instrumento" placeholder="Tipo (ej. Cuerda, Viento, Percusión)" required>
+                        <input type="text" id="num-serie" placeholder="Número de serie único" required>
+                        <select id="estado-fisico" required>
+                            <option value="">Seleccione estado físico inicial</option>
+                            <option value="Óptimo">Óptimo</option>
+                            <option value="Desgaste regular">Desgaste regular</option>
+                            <option value="En reparación">En reparación</option>
+                        </select>
+                        <label for="foto-instrumento">Foto del instrumento (opcional):</label>
+                        <input type="file" id="foto-instrumento" accept="image/*">
+                        <img id="vista-previa-foto" class="foto-previa" alt="Vista previa" style="display: none;">
+                        <button type="submit" class="btn btn-primary">Guardar Instrumento</button>
+                    </form>
+                </div>
+                <button class="btn btn-nav" onclick="cambiarPanel(1)">Ver Almacenamiento ➔</button>
+            </section>
 
-            function animarFondo() {
-                requestAnimationFrame(animarFondo);
-                grupoGeometrias.rotation.x += 0.002;
-                grupoGeometrias.rotation.y += 0.004;
-                renderer.render(scene, camera);
-            }
-            animarFondo();
-        }
+            <!-- Panel 2: inventario -->
+            <section class="panel" id="panel-2">
+                <button class="btn btn-nav" onclick="cambiarPanel(0)">⬅️ Registrar</button>
+                <div class="card">
+                    <h2>2. Almacenamiento e Inventario General</h2>
+                    <div class="tabla-scroll">
+                        <table>
+                            <thead>
+                                <tr><th>🗑️</th><th>ID</th><th>Foto</th><th>Instrumento</th><th>Tipo</th><th>N° de Serie</th><th>Estado Físico</th><th>Disponibilidad</th></tr>
+                            </thead>
+                            <tbody id="tabla-instrumentos"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <button class="btn btn-nav" onclick="cambiarPanel(2)">Ir a Préstamos ➔</button>
+            </section>
 
-        // 2. Cubo 3D Interactivo Individual en la Derecha
-        const contenedorCubo = document.getElementById('cubo-3d-derecha');
-        if (contenedorCubo) {
-            const sceneCubo = new THREE.Scene();
-            const cameraCubo = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-            const rendererCubo = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-            
-            rendererCubo.setSize(70, 70);
-            contenedorCubo.appendChild(rendererCubo.domElement);
+            <!-- Panel 3: préstamos -->
+            <section class="panel" id="panel-3">
+                <button class="btn btn-nav" onclick="cambiarPanel(1)">⬅️ Almacenamiento</button>
+                <div class="card">
+                    <h2>3. Registro de Préstamos</h2>
+                    <form id="form-prestamo">
+                        <select id="select-instrumento-prestamo" required>
+                            <option value="">Seleccione un instrumento disponible</option>
+                        </select>
+                        <p id="info-estado-salida" class="nota"></p>
+                        <input type="text" id="solicitante-prestamo" placeholder="Nombre del Alumno o Profesor" required>
+                        <input type="text" id="clase-evento" placeholder="Clase o Evento" required>
+                        <label for="fecha-prestamo">Fecha y Hora de Salida:</label>
+                        <input type="datetime-local" id="fecha-prestamo" required>
+                        <label for="fecha-limite">Fecha y Hora Límite:</label>
+                        <input type="datetime-local" id="fecha-limite" required>
 
-            const geometry = new THREE.BoxGeometry(2.2, 2.2, 2.2);
-            const materialesCubo = [
-                new THREE.MeshBasicMaterial({ color: 0xe74c3c }),
-                new THREE.MeshBasicMaterial({ color: 0x3498db }),
-                new THREE.MeshBasicMaterial({ color: 0x2ecc71 }),
-                new THREE.MeshBasicMaterial({ color: 0xf1c40f }),
-                new THREE.MeshBasicMaterial({ color: 0x9b59b6 }),
-                new THREE.MeshBasicMaterial({ color: 0xe67e22 })
-            ];
+                        <div class="firma-fila">
+                            <div class="firma-col">
+                                <label>Firma Digital (firma con el dedo o el mouse):</label>
+                                <canvas id="canvas-firma" width="360" height="140"></canvas>
+                                <button type="button" id="btn-limpiar-firma" class="btn btn-danger btn-sm">Borrar firma</button>
+                            </div>
+                            <div class="firma-datos">
+                                <input type="text" id="ci-solicitante" placeholder="Carnet de Identidad (CI)">
+                                <input type="text" id="telefono-solicitante" placeholder="Teléfono">
+                            </div>
+                        </div>
 
-            const cuboInteractivo = new THREE.Mesh(geometry, materialesCubo);
-            sceneCubo.add(cuboInteractivo);
-            cameraCubo.position.z = 4.5;
+                        <label class="check-conformidad">
+                            <input type="checkbox" id="conformidad" required>
+                            <span>El solicitante recibe el instrumento en el estado indicado y acepta las sanciones por retraso o daño.</span>
+                        </label>
 
-            let isDragging = false;
-            let previousMousePosition = { x: 0, y: 0 };
+                        <button type="submit" class="btn btn-primary">Registrar Préstamo</button>
+                    </form>
+                </div>
+                <button class="btn btn-nav" onclick="cambiarPanel(3)">Ver Devoluciones ➔</button>
+            </section>
 
-            contenedorCubo.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            });
+            <!-- Panel 4: devoluciones -->
+            <section class="panel" id="panel-4">
+                <button class="btn btn-nav" onclick="cambiarPanel(2)">⬅️ Préstamos</button>
+                <div class="card">
+                    <h2>4. Control de Devoluciones y Cronómetro</h2>
+                    <div class="tabla-scroll">
+                        <table>
+                            <thead>
+                                <tr><th>ID</th><th>Instrumento</th><th>Solicitante</th><th>Salida / Límite</th><th>Cronómetro</th><th>Multa</th><th>Acción</th></tr>
+                            </thead>
+                            <tbody id="tabla-devoluciones"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
 
-            window.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                const deltaX = e.clientX - previousMousePosition.x;
-                const deltaY = e.clientY - previousMousePosition.y;
+    <!-- ===================== MODALES ===================== -->
 
-                cuboInteractivo.rotation.y += deltaX * 0.01;
-                cuboInteractivo.rotation.x += deltaY * 0.01;
+    <!-- Bandeja admin -->
+    <div id="modal-bandeja-admin" class="modal-overlay">
+        <div class="modal-box modal-ancho">
+            <h3>✉️ Bandeja de Préstamos y Solicitudes</h3>
+            <div id="lista-solicitudes-admin" class="lista-scroll"></div>
+            <button class="btn btn-gray btn-block" onclick="cerrarModal('modal-bandeja-admin')">Cerrar</button>
+        </div>
+    </div>
 
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            });
+    <!-- Bandeja cliente -->
+    <div id="modal-bandeja-cliente" class="modal-overlay">
+        <div class="modal-box">
+            <h3>✉️ Mis Notificaciones de Préstamo</h3>
+            <div id="lista-notificaciones-cliente" class="lista-scroll"></div>
+            <button class="btn btn-gray btn-block" onclick="cerrarModal('modal-bandeja-cliente')">Cerrar</button>
+        </div>
+    </div>
 
-            window.addEventListener('mouseup', () => { isDragging = false; });
+    <!-- Reserva virtual -->
+    <div id="modal-reserva" class="modal-overlay">
+        <div class="modal-box">
+            <h3>🎵 Reserva Virtual de Instrumento</h3>
+            <div id="detalle-instrumento-modal" class="detalle-modal"></div>
 
-            function animarCubo() {
-                requestAnimationFrame(animarCubo);
-                if (!isDragging) {
-                    cuboInteractivo.rotation.x += 0.01;
-                    cuboInteractivo.rotation.y += 0.015;
-                }
-                rendererCubo.render(sceneCubo, cameraCubo);
-            }
-            animarCubo();
-        }
-    </script>
+            <form id="form-reserva-virtual" onsubmit="enviarReservaVirtual(event)">
+                <input type="hidden" id="res-instrumento-id">
+                <label for="res-nombre">Nombre:</label>
+                <input type="text" id="res-nombre" readonly class="solo-lectura">
+                <label for="res-tipo-solicitante">Tipo de Solicitante:</label>
+                <select id="res-tipo-solicitante" required>
+                    <option value="Alumno">Alumno</option>
+                    <option value="Profesor">Profesor</option>
+                    <option value="Persona común">Persona común</option>
+                </select>
+                <label for="res-clase">Clase o Evento:</label>
+                <input type="text" id="res-clase" placeholder="Ej. Ensayo Orquesta" required>
+                <label for="res-fecha-salida">Fecha y Hora de Salida:</label>
+                <input type="datetime-local" id="res-fecha-salida" required>
+                <label for="res-fecha-limite">Fecha y Hora Límite:</label>
+                <input type="datetime-local" id="res-fecha-limite" required>
+                <label for="res-ci">CI:</label>
+                <input type="text" id="res-ci" required>
+                <label for="res-telefono">Teléfono:</label>
+                <input type="text" id="res-telefono" required>
+
+                <div class="pago-box">
+                    <label for="res-metodo-pago"><strong>💳 Adelanto de reserva: <span id="monto-adelanto">Bs 25.00</span></strong></label>
+                    <select id="res-metodo-pago" onchange="cambiarMetodoPago()">
+                        <option value="tarjeta">Tarjeta de Crédito / Débito</option>
+                        <option value="qr">Pago por QR</option>
+                    </select>
+                    <!-- Pago con tarjeta -->
+                    <div id="pago-tarjeta" class="pago-detalle">
+                        <label for="tarj-nombre">Nombre del titular:</label>
+                        <input type="text" id="tarj-nombre" placeholder="Como aparece en la tarjeta" autocomplete="cc-name">
+
+                        <label for="tarj-numero">Número de tarjeta: <span id="tarj-marca" class="tarj-marca"></span></label>
+                        <input type="text" id="tarj-numero" inputmode="numeric" placeholder="0000 0000 0000 0000" maxlength="19" autocomplete="cc-number">
+
+                        <div class="tarj-fila">
+                            <div>
+                                <label for="tarj-vence">Vencimiento (MM/AA):</label>
+                                <input type="text" id="tarj-vence" inputmode="numeric" placeholder="MM/AA" maxlength="5" autocomplete="cc-exp">
+                            </div>
+                            <div>
+                                <label for="tarj-cvv">CVV (código de seguridad):</label>
+                                <input type="password" id="tarj-cvv" inputmode="numeric" placeholder="•••" maxlength="3" autocomplete="cc-csc">
+                            </div>
+                        </div>
+                        <p class="nota">🔒 Los datos se validan en tu navegador y no se guardan. Demostración: no se realiza ningún cobro real.</p>
+                    </div>
+
+                    <!-- Pago por QR -->
+                    <div id="pago-qr" class="pago-detalle" hidden>
+                        <p>Escanea el código QR con la app de tu banco para pagar el adelanto.</p>
+                        <img id="qr-pago-img" class="qr-pago-img" alt="Código QR de pago" hidden>
+                        <p id="qr-pago-aviso" class="nota"></p>
+                        <a id="qr-descargar" class="btn btn-info btn-block" href="/api/qr/imagen" download="qr-pago.png" hidden>⬇️ Descargar QR</a>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-block">Confirmar Reserva</button>
+            </form>
+            <button class="btn btn-danger btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-reserva')">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Registro -->
+    <div id="modal-registro" class="modal-overlay">
+        <div class="modal-box">
+            <h3>Registro de Nuevo Usuario</h3>
+            <form id="form-registro" onsubmit="ejecutarRegistro(event)">
+                <input type="text" id="reg-nombre" placeholder="Nombre completo" required>
+                <input type="email" id="reg-email" placeholder="Correo electrónico" required>
+                <input type="password" id="reg-password" placeholder="Contraseña (mínimo 6 caracteres)" minlength="6" required>
+                <input type="text" id="reg-ci" placeholder="Carnet de Identidad (CI)" required>
+                <input type="text" id="reg-telefono" placeholder="Teléfono" required>
+                <button type="submit" class="btn btn-info btn-block">Registrarse</button>
+            </form>
+            <button class="btn btn-danger btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-registro')">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Devolución con inspección -->
+    <div id="modal-devolucion" class="modal-overlay">
+        <div class="modal-box">
+            <h3>↩️ Devolución e Inspección del Instrumento</h3>
+            <div id="dev-resumen" class="detalle-modal"></div>
+
+            <form id="form-devolucion" onsubmit="confirmarDevolucion(event)">
+                <input type="hidden" id="dev-id">
+                <label for="dev-estado">Estado físico al regresar:</label>
+                <select id="dev-estado" required>
+                    <option value="Óptimo">Óptimo</option>
+                    <option value="Desgaste regular">Desgaste regular</option>
+                    <option value="En reparación">En reparación</option>
+                </select>
+                <label for="dev-dano">Nivel de daño (si lo hay):</label>
+                <select id="dev-dano" onchange="actualizarPrevisualizacion()" required></select>
+                <label for="dev-obs">Observaciones:</label>
+                <input type="text" id="dev-obs" placeholder="Ej. Cuerda rota, rayón en el cuerpo...">
+
+                <div id="dev-preview" class="preview-multa"></div>
+                <p id="dev-tarifas" class="nota"></p>
+
+                <button type="submit" class="btn btn-success btn-block">Confirmar Devolución</button>
+            </form>
+            <button class="btn btn-gray btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-devolucion')">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- Acta de entrega -->
+    <div id="modal-acta" class="modal-overlay">
+        <div class="modal-box">
+            <h3>📄 Acta de Entrega</h3>
+            <div id="acta-contenido" class="lista-scroll"></div>
+            <button class="btn btn-gray btn-block" onclick="cerrarModal('modal-acta')">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Cambiar contraseña -->
+    <div id="modal-password" class="modal-overlay">
+        <div class="modal-box">
+            <h3>🔑 Cambiar contraseña</h3>
+            <form id="form-password" onsubmit="cambiarPassword(event)">
+                <label for="pw-actual">Contraseña actual:</label>
+                <input type="password" id="pw-actual" autocomplete="current-password" required>
+                <label for="pw-nueva">Nueva contraseña (mínimo 8 caracteres):</label>
+                <input type="password" id="pw-nueva" autocomplete="new-password" minlength="8" required>
+                <label for="pw-repetir">Repite la nueva contraseña:</label>
+                <input type="password" id="pw-repetir" autocomplete="new-password" minlength="8" required>
+                <p id="pw-mensaje" class="pw-mensaje" role="status"></p>
+                <button type="submit" class="btn btn-success btn-block">Guardar nueva contraseña</button>
+            </form>
+            <button class="btn btn-gray btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-password')">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- QR de pagos (administrador) -->
+    <div id="modal-qr-admin" class="modal-overlay">
+        <div class="modal-box">
+            <h3>🔳 Código QR de pagos</h3>
+            <div class="qr-admin-caja">
+                <img id="qr-admin-preview" class="qr-admin-img" alt="QR de pagos" hidden>
+            </div>
+            <label for="qr-archivo">Subir foto del QR:</label>
+            <input type="file" id="qr-archivo" accept="image/*">
+            <button id="btn-guardar-qr" class="btn btn-success btn-block" onclick="guardarQrAdmin()" disabled>Guardar QR</button>
+            <button id="btn-mostrar-qr" class="btn btn-info btn-block" onclick="mostrarQrEnPantalla()">🖥️ Mostrar QR en pantalla (pago presencial)</button>
+            <button id="btn-eliminar-qr" class="btn btn-danger btn-block" onclick="eliminarQrAdmin(this)" hidden>Quitar el QR subido</button>
+            <button class="btn btn-gray btn-block" onclick="cerrarModal('modal-qr-admin')">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- QR a pantalla grande para pago presencial -->
+    <div id="modal-qr-pantalla" class="modal-overlay" onclick="cerrarModal('modal-qr-pantalla')">
+        <div class="modal-box qr-pantalla-box">
+            <h3>Escanea para pagar</h3>
+            <img id="qr-pantalla-img" class="qr-grande" alt="Código QR de pago">
+            <p class="nota">Toca en cualquier parte para cerrar.</p>
+        </div>
+    </div>
+
+    <div id="toast-container" aria-live="polite"></div>
+
     <script src="script.js"></script>
 </body>
 </html>
