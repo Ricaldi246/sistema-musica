@@ -33,6 +33,7 @@ app.use(express.static(path.join(__dirname, 'frontend')));
 //  BASE DE DATOS
 // =====================================================================
 const dbFile = path.join(__dirname, 'backend', 'database.db');
+fs.mkdirSync(path.dirname(dbFile), { recursive: true }); // crea la carpeta backend si no existe
 const db = new sqlite3.Database(dbFile, (err) => {
     if (err) console.error('Error al conectar con la base de datos:', err.message);
     else console.log('Conectado a la Base de Datos SQL exitosamente 🗄️');

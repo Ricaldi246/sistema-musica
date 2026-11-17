@@ -1,58 +1,39 @@
-// =====================================================================
+/// =====================================================================
 //  ESTADO GLOBAL Y UTILIDADES
 // =====================================================================
-let intervaloCronometro = null;
-let listaInstrumentosCache = [];
-let prestamosCache = [];
-let qrDisponible = false;
-let config = { moneda: 'Bs', tarifaRetrasoPorDia: 10, horasGracia: 1, topeMultaRetraso: 100, adelantoReserva: 25, multasDano: {} };
+// =====================================================================
+//  UTILIDADES Y ESTADO GLOBAL
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const pad = (n) => String(n).padStart(2, '0');
+const random = (min, max) => Math.random() * (max - min) + min;
 const ESTADOS_FISICOS = ['Óptimo', 'Desgaste regular', 'En reparación'];
 
-const $ = (id) => document.getElementById(id);
+let config = { moneda: 'Bs', adelantoReserva: 25, tarifaRetrasoPorDia: 10, horasGracia: 1, topeMultaRetraso: 100, multasDano: {} };
+let listaInstrumentosCache = [];
+let prestamosCache = [];
+let animacionIntroYaEjecutada = false;
+let intervaloCronometro = null;
+let qrDisponible = false;
 
-// Escapa texto para que nadie pueda inyectar HTML/JS desde un nombre o comentario
 function esc(valor) {
-    return String(valor ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// Aviso flotante que se cierra solo (no hay que pulsar "Aceptar")
-function toast(mensaje, tipo = 'info') {
-    const contenedor = $('toast-container');
-    if (!contenedor) return;
-    if ([...contenedor.children].some((t) => t.textContent === mensaje)) return; // evita avisos repetidos
-    const aviso = document.createElement('div');
-    aviso.className = `toast toast-${tipo}`;
-    aviso.setAttribute('role', 'status');
-    aviso.textContent = mensaje;
-    aviso.addEventListener('click', () => aviso.remove());
-    contenedor.appendChild(aviso);
-    setTimeout(() => aviso.remove(), tipo === 'error' ? 5000 : 3000);
-}
+function moneda(n) { return `${config.moneda} ${Number(n || 0).toFixed(2)}`; }
 
-// Confirmación sin ventanas emergentes: el botón cambia a "¿Seguro?" durante 3 segundos
-function confirmarClic(boton) {
-    if (boton.dataset.confirmando === '1') return true;
-    boton.dataset.confirmando = '1';
-    boton.dataset.original = boton.innerHTML;
-    boton.innerHTML = '¿Seguro?';
-    boton.classList.add('btn-confirmar');
-    setTimeout(() => {
-        if (!boton.isConnected) return;
-        boton.innerHTML = boton.dataset.original;
-        boton.classList.remove('btn-confirmar');
-        delete boton.dataset.confirmando;
-    }, 3000);
-    return false;
-}
-
-const pad = (n) => String(n).padStart(2, '0');
-const moneda = (n) => `${config.moneda} ${Number(n || 0).toFixed(2)}`;
-const verFecha = (f) => esc(String(f || '—').replace('T', ' '));
-
-// Fecha/hora local en el formato de <input type="datetime-local">
 function ahoraLocalInput() {
     const d = new Date();
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function verFecha(f) {
+    if (!f) return '—';
+    const d = new Date(f);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function getSesion() {
@@ -60,138 +41,596 @@ function getSesion() {
 }
 function guardarSesion(sesion) { localStorage.setItem('sesion', JSON.stringify(sesion)); }
 
-// Todas las llamadas al servidor pasan por aquí (envía el token y maneja errores)
-async function api(url, opciones = {}) {
+async function api(url, { method = 'GET', body } = {}) {
+    const headers = {};
     const sesion = getSesion();
-    const headers = { 'Content-Type': 'application/json' };
     if (sesion && sesion.token) headers.Authorization = `Bearer ${sesion.token}`;
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-    const res = await fetch(url, {
-        method: opciones.method || 'GET',
-        headers,
-        body: opciones.body !== undefined ? JSON.stringify(opciones.body) : undefined
-    });
+    let resp;
+    try {
+        resp = await fetch(url, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+    } catch (e) {
+        throw new Error('No se pudo conectar con el servidor. ¿Está encendido?');
+    }
+    let data = null;
+    try { data = await resp.json(); } catch (e) { /* sin cuerpo JSON */ }
 
-    let data = {};
-    try { data = await res.json(); } catch (e) { /* sin cuerpo */ }
-
-    if (res.status === 401 && sesion) {
+    if (resp.status === 401 && sesion && url !== '/api/login' && url !== '/api/logout') {
         localStorage.removeItem('sesion');
-        sessionStorage.setItem('aviso', 'Tu sesión expiró. Inicia sesión de nuevo.');
+        sessionStorage.setItem('aviso', (data && data.error) || 'Tu sesión expiró. Inicia sesión de nuevo.');
         location.reload();
-        throw new Error(data.error || 'Sesión expirada');
+        throw new Error('Sesión expirada.');
     }
-    if (!res.ok) {
-        if (data.error) throw new Error(data.error);
-        if (res.status === 404) {
-            throw new Error('El servidor no reconoce esta acción (404). Detén el servidor y vuelve a iniciarlo con "npm start" para cargar la versión nueva.');
-        }
-        if (res.status === 413) throw new Error('La imagen es demasiado grande. Prueba con una más pequeña.');
-        throw new Error(`Error del servidor (código ${res.status}).`);
-    }
+    if (!resp.ok) throw new Error((data && data.error) || 'Error del servidor.');
     return data;
 }
 
+function toast(mensaje, tipo = 'ok') {
+    const contenedor = $('toast-container');
+    if (!contenedor) return;
+    const t = document.createElement('div');
+    t.className = `toast ${tipo === 'error' ? 'toast-error' : 'toast-ok'}`;
+    t.textContent = mensaje;
+    t.addEventListener('click', () => t.remove());
+    contenedor.appendChild(t);
+    setTimeout(() => t.remove(), tipo === 'error' ? 6000 : 3500);
+}
+
+// Botón de doble clic: el primer clic pide confirmar, el segundo ejecuta
+function confirmarClic(boton) {
+    if (!boton) return true;
+    if (boton.dataset.confirmando === '1') { delete boton.dataset.confirmando; return true; }
+    boton.dataset.confirmando = '1';
+    const original = boton.innerHTML;
+    boton.innerHTML = '¿Seguro?';
+    boton.classList.add('btn-confirmar');
+    setTimeout(() => {
+        boton.innerHTML = original;
+        boton.classList.remove('btn-confirmar');
+        delete boton.dataset.confirmando;
+    }, 3000);
+    return false;
+}
+
 async function cargarConfig() {
-    try { config = await api('/api/config'); } catch (e) { console.error('No se pudo cargar la configuración', e); }
+    try { config = await api('/api/config'); } catch (e) { console.error(e); }
 }
 
 // =====================================================================
-//  LÁMPARA INTERACTIVA (ANIMACIÓN LOGIN)
+//  LOGIN CON LÁMPARA
 // =====================================================================
-const room = $('room');
-const handle = $('stringHandle');
-const path = $('stringPath');
-const fireflies = $('fireflies');
+  // DOM Elements
+  const body = document.body;
+  const room = $("vista-login");
+  const cordBead = document.getElementById("cordBead");
+  const cordHit = document.getElementById("cordHit");
+  const elasticCord = document.getElementById("elasticCord");
+  const shadeAssembly = document.getElementById("shadeAssembly");
+  const soundToggle = document.getElementById("soundToggle");
+  const soundOnIcon = soundToggle.querySelector(".sound-on");
+  const soundOffIcon = soundToggle.querySelector(".sound-off");
 
-let isOn = false;
-let dragging = false;
-let startX = 0;
-let startY = 0;
-let dragX = 0;
-let dragY = 0;
+  // Form Elements
+  const loginCard = document.getElementById("loginCard");
+  const tabSignIn = document.getElementById("tabSignIn");
+  const tabRegister = document.getElementById("tabRegister");
+  const eyeToggle = document.getElementById("eyeToggle");
+  const passField = document.getElementById("login-password");
+  const eyeShow = eyeToggle.querySelector(".eye-show");
+  const eyeHide = eyeToggle.querySelector(".eye-hide");
 
-function setLamp(on) {
-    isOn = on;
-    if (room) room.classList.toggle('on', isOn);
-    if (isOn) createFireflies();
-    else if (fireflies) fireflies.innerHTML = '';
-}
+  // State
+  let isOn = false;
+  let isSoundEnabled = true;
+  let activeTab = "signin";
+  let isSimulatingPull = false;
 
-function updateString(x, y) {
-    if (path) path.setAttribute('d', `M 0 0 L ${x} ${80 + y}`);
-}
+  // Elastic String Geometry
+  const ANCHOR_X = 245;
+  const ANCHOR_Y = 212;
+  const REST_X = 245;
+  const REST_Y = 300;
+  const MAX_STRETCH = 120;
+  const TRIGGER_PULL = 32;
 
-function resetHandle() {
-    if (handle) {
-        handle.style.transform = 'translate(0px, 0px)';
-        updateString(0, 0);
+  gsap.set(cordBead, { x: REST_X, y: REST_Y });
+
+  let twangAmp = 0;
+  let twangStartTime = 0;
+
+  function renderElasticString(curX, curY) {
+    let twangOffset = 0;
+    if (twangAmp > 0.05) {
+      const elapsed = performance.now() - twangStartTime;
+      twangOffset = Math.sin(elapsed * 0.05) * twangAmp;
     }
-}
 
-if (handle) {
-    handle.addEventListener('pointerdown', (e) => {
-        dragging = true;
-        handle.classList.add('dragging');
-        startX = e.clientX;
-        startY = e.clientY;
-        dragX = 0;
-        dragY = 0;
-        if (handle.setPointerCapture) handle.setPointerCapture(e.pointerId);
-    });
-    handle.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        dragX = (e.clientX - startX) * 0.3;
-        dragY = Math.max(0, e.clientY - startY) * 0.6;
-        dragX = Math.max(-35, Math.min(35, dragX));
-        dragY = Math.min(180, dragY);
-        handle.style.transform = `translate(${dragX}px, ${dragY}px)`;
-        updateString(dragX, dragY);
-    });
-    handle.addEventListener('pointerup', () => {
-        if (!dragging) return;
-        dragging = false;
-        handle.classList.remove('dragging');
-        const pulled = dragY > 30;
-        resetHandle();
-        if (pulled) setLamp(!isOn);
-    });
-}
+    const midX = (ANCHOR_X + curX) / 2 + twangOffset;
+    const midY = (ANCHOR_Y + curY) / 2;
 
-function random(min, max) { return Math.random() * (max - min) + min; }
+    // Dynamic rubber cord thinning as it stretches
+    const stretchRatio = Math.max(1, (curY - ANCHOR_Y) / (REST_Y - ANCHOR_Y));
+    const strokeWidth = Math.max(1.6, 2.6 / Math.sqrt(stretchRatio));
 
-function createFireflies() {
-    if (!fireflies) return;
-    fireflies.innerHTML = '';
-    for (let i = 0; i < 18; i++) {
-        const dot = document.createElement('span');
-        dot.className = 'firefly';
-        const size = random(3, 7);
-        dot.style.width = `${size}px`;
-        dot.style.height = `${size}px`;
-        dot.style.setProperty('--duration', `${random(35, 65)}s`);
-        dot.style.setProperty('--delay', `${random(0, 3)}s`);
-        for (let n = 1; n <= 5; n++) {
-            dot.style.setProperty(`--x${n}`, `${random(0, 100)}vw`);
-            dot.style.setProperty(`--y${n}`, `${random(0, 100)}vh`);
+    elasticCord.setAttribute("d", `M ${ANCHOR_X} ${ANCHOR_Y} Q ${midX} ${midY} ${curX} ${curY}`);
+    elasticCord.setAttribute("stroke-width", strokeWidth.toFixed(2));
+  }
+
+  // Web Audio Synthesizer
+  let audioCtx = null;
+
+  function initAudio() {
+    if (!audioCtx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (AudioContext) audioCtx = new AudioContext();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  }
+
+  function playElasticPluckSound(pullDist, turningOn) {
+    if (!isSoundEnabled) return;
+    try {
+      initAudio();
+      if (!audioCtx) return;
+
+      const now = audioCtx.currentTime;
+
+      // Pluck tone
+      const osc = audioCtx.createOscillator();
+      const oscGain = audioCtx.createGain();
+      osc.type = "triangle";
+
+      const startFreq = 480 + Math.min(260, pullDist * 3);
+      osc.frequency.setValueAtTime(startFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(140, now + 0.12);
+
+      oscGain.gain.setValueAtTime(0.4, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      osc.connect(oscGain);
+      oscGain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+
+      // Switch snap
+      if (pullDist >= TRIGGER_PULL) {
+        const snap = audioCtx.createOscillator();
+        const snapGain = audioCtx.createGain();
+        snap.type = "sine";
+        snap.frequency.setValueAtTime(turningOn ? 1800 : 1500, now + 0.02);
+        snap.frequency.exponentialRampToValueAtTime(320, now + 0.06);
+
+        snapGain.gain.setValueAtTime(0.35, now + 0.02);
+        snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+
+        snap.connect(snapGain);
+        snapGain.connect(audioCtx.destination);
+        snap.start(now + 0.02);
+        snap.stop(now + 0.07);
+
+        // Power hum
+        if (turningOn) {
+          const hum = audioCtx.createOscillator();
+          const humGain = audioCtx.createGain();
+          hum.type = "sine";
+          hum.frequency.setValueAtTime(120, now + 0.05);
+          humGain.gain.setValueAtTime(0.001, now);
+          humGain.gain.linearRampToValueAtTime(0.06, now + 0.08);
+          humGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+          hum.connect(humGain);
+          humGain.connect(audioCtx.destination);
+          hum.start(now + 0.05);
+          hum.stop(now + 0.38);
         }
-        fireflies.appendChild(dot);
+      }
+    } catch (e) {
+      console.warn("AudioContext error:", e);
     }
-}
+  }
+
+  // Sound Toggle
+  soundToggle.addEventListener("click", () => {
+    isSoundEnabled = !isSoundEnabled;
+    soundOnIcon.classList.toggle("hidden", !isSoundEnabled);
+    soundOffIcon.classList.toggle("hidden", isSoundEnabled);
+    if (isSoundEnabled) initAudio();
+  });
+
+  function playColorSwitchSound() {
+    if (!isSoundEnabled) return;
+    try {
+      initAudio();
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(1320, now + 0.05);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.07);
+    } catch (e) { }
+  }
+
+  // Color Palette Switcher
+  const colorDots = document.querySelectorAll(".color-dot-btn");
+  let currentColor = "amber";
+
+  colorDots.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const selectedColor = btn.getAttribute("data-color");
+      if (selectedColor === currentColor) return;
+
+      colorDots.forEach((d) => d.classList.remove("active"));
+      btn.classList.add("active");
+
+      currentColor = selectedColor;
+      body.setAttribute("data-color", currentColor);
+      activeParticleTheme = particleThemes[currentColor] || particleThemes.amber;
+
+      playColorSwitchSound();
+
+      if (isOn) {
+        gsap.fromTo(".svg-light-beam, .ambient-glow",
+          { opacity: 0.65 },
+          {
+            opacity: 1,
+            duration: 0.45,
+            ease: "power1.out",
+            onComplete: () => {
+              gsap.set([".svg-light-beam", ".ambient-glow"], { clearProps: "opacity,visibility" });
+            }
+          }
+        );
+      }
+    });
+  });
+
+  // Elastic Cord Draggable Interaction
+  Draggable.create(cordBead, {
+    type: "x,y",
+    bounds: {
+      minY: REST_Y,
+      maxY: REST_Y + MAX_STRETCH,
+      minX: REST_X - 45,
+      maxX: REST_X + 45,
+    },
+    cursor: "grab",
+    activeCursor: "grabbing",
+    onPress() {
+      initAudio();
+      twangAmp = 0;
+    },
+    onDrag() {
+      renderElasticString(this.x, this.y);
+
+      // Shade tilts slightly under tension
+      const pullDist = this.y - REST_Y;
+      const shadeTilt = (pullDist / MAX_STRETCH) * 1.8;
+      gsap.set(shadeAssembly, {
+        rotation: shadeTilt,
+        transformOrigin: "215px 175px"
+      });
+    },
+    onRelease() {
+      handleElasticRelease(this.x, this.y);
+    }
+  });
+
+  function handleElasticRelease(curX, curY) {
+    const pullDist = curY - REST_Y;
+    const isTriggered = pullDist >= TRIGGER_PULL;
+
+    if (isTriggered) {
+      toggleLamp();
+    }
+
+    playElasticPluckSound(pullDist, isOn);
+
+    // Bead rebound snap
+    gsap.to(cordBead, {
+      x: REST_X,
+      y: REST_Y,
+      duration: 1.15,
+      ease: "elastic.out(2.2, 0.16)",
+      onUpdate: () => {
+        const bx = gsap.getProperty(cordBead, "x");
+        const by = gsap.getProperty(cordBead, "y");
+        renderElasticString(bx, by);
+      }
+    });
+
+    // String twang vibration
+    twangAmp = (curX - REST_X) * 0.4 + (pullDist * 0.3);
+    twangStartTime = performance.now();
+    gsap.to({ val: twangAmp }, {
+      val: 0,
+      duration: 0.9,
+      ease: "power2.out",
+      onUpdate: function () {
+        twangAmp = this.targets()[0].val;
+      }
+    });
+
+    // Shade bounce back
+    gsap.to(shadeAssembly, {
+      rotation: 0,
+      duration: 0.7,
+      ease: "back.out(2.2)",
+      transformOrigin: "215px 175px"
+    });
+  }
+
+  // Pull cord click trigger
+  cordHit.addEventListener("click", () => {
+    if (isSimulatingPull) return;
+    performSimulatedPull();
+  });
+
+  function performSimulatedPull() {
+    isSimulatingPull = true;
+    initAudio();
+
+    gsap.to(cordBead, {
+      y: REST_Y + 50,
+      duration: 0.22,
+      ease: "power2.in",
+      onUpdate: () => {
+        const by = gsap.getProperty(cordBead, "y");
+        renderElasticString(REST_X, by);
+      },
+      onComplete: () => {
+        handleElasticRelease(REST_X, REST_Y + 50);
+        setTimeout(() => {
+          isSimulatingPull = false;
+        }, 500);
+      }
+    });
+
+    gsap.to(shadeAssembly, {
+      rotation: 1.8,
+      duration: 0.22,
+      ease: "power2.in",
+      transformOrigin: "230px 188px"
+    });
+  }
+
+  // Lamp State Controller
+  function toggleLamp() {
+    setLampState(!isOn);
+  }
+
+  // Enciende o apaga la lámpara solo si hace falta
+  function setLamp(encendida) {
+    if (isOn !== encendida) setLampState(encendida);
+  }
+
+  function setLampState(targetState) {
+    isOn = targetState;
+    body.setAttribute("data-on", isOn ? "true" : "false");
+
+    gsap.killTweensOf([
+      ".bulb-glow-core",
+      ".bulb-filament",
+      ".svg-light-beam",
+      ".ambient-glow",
+      ".shade-reflector-on",
+      loginCard,
+      "#loginCard *"
+    ]);
+
+    gsap.set([".svg-light-beam", ".ambient-glow", ".shade-reflector-on"], { clearProps: "opacity,visibility" });
+
+    const filament = document.querySelector(".bulb-filament");
+    const bulbGlow = document.querySelector(".bulb-glow-core");
+
+    if (isOn) {
+      // Lamp ON
+      gsap.timeline()
+        .to(filament, { stroke: "#fff", duration: 0.05 })
+        .to(bulbGlow, { opacity: 0.95, duration: 0.1, ease: "power2.out" });
+
+      gsap.fromTo(loginCard,
+        { y: 24, scale: 0.96, opacity: 0 },
+        { y: 0, scale: 1, opacity: 1, duration: 0.5, ease: "power2.out" }
+      );
+
+      gsap.fromTo(
+        ".card-header, .auth-tabs, .form-group, .submit-btn",
+        { y: 14, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.45, stagger: 0.04, ease: "power2.out", delay: 0.08 }
+      );
+    } else {
+      // Lamp OFF
+      gsap.set(bulbGlow, { opacity: 0, clearProps: "opacity" });
+      gsap.set(filament, { stroke: "#555", filter: "none", clearProps: "all" });
+
+      gsap.to(loginCard, {
+        y: 16,
+        opacity: 0,
+        scale: 0.96,
+        duration: 0.22,
+        ease: "power2.in",
+        onComplete: () => {
+          gsap.set(loginCard, { clearProps: "all" });
+        }
+      });
+
+      gsap.set(loginCard, { rotateX: 0, rotateY: 0 });
+    }
+  }
+
+  // Canvas Dust Particles
+  const canvas = document.getElementById("dustCanvas");
+  const ctx = canvas.getContext("2d");
+  let width, height;
+  let particles = [];
+  const PARTICLE_COUNT = 60;
+
+  const particleThemes = {
+    amber: { fill: "255, 205, 120", glow: "255, 185, 80" },
+    cyan: { fill: "140, 245, 255", glow: "0, 240, 255" },
+    rose: { fill: "255, 160, 200", glow: "255, 51, 133" },
+    mint: { fill: "160, 255, 200", glow: "0, 230, 118" },
+    moonlight: { fill: "220, 235, 255", glow: "200, 220, 255" }
+  };
+  let activeParticleTheme = particleThemes.amber;
+
+  function resizeCanvas() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resizeCanvas);
+  resizeCanvas();
+
+  class Particle {
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.x = Math.random() * width;
+      this.y = Math.random() * height;
+      this.radius = Math.random() * 2 + 0.6;
+      this.vx = (Math.random() - 0.4) * 0.35;
+      this.vy = -Math.random() * 0.4 - 0.15;
+      this.alpha = Math.random() * 0.6 + 0.2;
+      this.pulseSpeed = Math.random() * 0.03 + 0.01;
+      this.pulse = Math.random() * Math.PI;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      this.pulse += this.pulseSpeed;
+      if (this.y < 0) this.y = height;
+      if (this.x < 0) this.x = width;
+      if (this.x > width) this.x = 0;
+    }
+    draw() {
+      const currentAlpha = (Math.sin(this.pulse) * 0.3 + 0.7) * this.alpha;
+      const factor = isOn ? 1 : 0.08;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${activeParticleTheme.fill}, ${currentAlpha * factor})`;
+      if (isOn) {
+        ctx.shadowBlur = 7;
+        ctx.shadowColor = `rgba(${activeParticleTheme.glow}, 0.5)`;
+      }
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push(new Particle());
+  }
+
+  function renderParticles() {
+    if (room.style.display === "none") { requestAnimationFrame(renderParticles); return; }
+    ctx.clearRect(0, 0, width, height);
+    for (let i = 0; i < particles.length; i++) {
+      particles[i].update();
+      particles[i].draw();
+    }
+    requestAnimationFrame(renderParticles);
+  }
+  renderParticles();
+
+  // Pestañas: "Registrarse" abre el formulario de registro
+  tabRegister.addEventListener("click", () => abrirModal("modal-registro"));
+  tabSignIn.addEventListener("click", () => $("login-email").focus());
+
+  const forgotLink = document.getElementById("forgotLink");
+  if (forgotLink) {
+    forgotLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      toast("Para recuperar tu contraseña comunícate con el administrador de la academia.");
+    });
+  }
+
+
+  // Password Visibility Toggle
+  eyeToggle.addEventListener("click", () => {
+    const isPassword = passField.getAttribute("type") === "password";
+    passField.setAttribute("type", isPassword ? "text" : "password");
+    eyeShow.classList.toggle("hidden", isPassword);
+    eyeHide.classList.toggle("hidden", !isPassword);
+  });
+
+
+  // 3D Tilt on Mouse Move
+  const card = document.getElementById("loginCard");
+  const formStage = document.querySelector(".form-stage");
+
+  formStage.addEventListener("mousemove", (e) => {
+    if (!isOn) return;
+    const rect = formStage.getBoundingClientRect();
+    const x = e.clientX - rect.left - rect.width / 2;
+    const y = e.clientY - rect.top - rect.height / 2;
+
+    gsap.to(card, {
+      rotateX: -(y / rect.height) * 9,
+      rotateY: (x / rect.width) * 9,
+      duration: 0.5,
+      ease: "power1.out",
+      transformPerspective: 900
+    });
+  });
+
+  formStage.addEventListener("mouseleave", () => {
+    gsap.to(card, {
+      rotateX: 0,
+      rotateY: 0,
+      duration: 0.7,
+      ease: "power2.out"
+    });
+  });
+
+  // Render initial string
+  renderElasticString(REST_X, REST_Y);
 
 // =====================================================================
 //  NAVEGACIÓN ENTRE VISTAS Y MODALES
 // =====================================================================
 function mostrarVista(nombre) {
-    if (room) room.style.display = nombre === 'login' ? 'flex' : 'none';
-    $('vista-catalogo').style.display = nombre === 'catalogo' ? 'block' : 'none';
-    $('vista-admin').style.display = nombre === 'admin' ? 'block' : 'none';
+    if (room) room.style.display = nombre === 'login' ? 'block' : 'none';
+    const vistaCat = $('vista-catalogo');
+    const vistaAdm = $('vista-admin');
+    vistaCat.style.display = nombre === 'catalogo' ? 'block' : 'none';
+    vistaAdm.style.display = nombre === 'admin' ? 'block' : 'none';
     if (nombre !== 'login') setLamp(false); // apaga las luciérnagas fuera del login
+
     const capa = $('decoracion');
-    if (capa) {
-        capa.hidden = nombre === 'login';
-        capa.className = `decoracion vista-${nombre}`;
-        if (nombre !== 'login') crearNotasDecorativas();
+    if (!capa) return;
+    capa.hidden = nombre === 'login';
+    capa.className = `decoracion vista-${nombre}`;
+
+    if (nombre === 'login') { animacionIntroYaEjecutada = false; return; }
+
+    inicializarEscenaNavidena();
+    const destino = nombre === 'catalogo' ? vistaCat : vistaAdm;
+    const menosMovimiento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!animacionIntroYaEjecutada && !menosMovimiento) {
+        // Primera vez después de iniciar sesión: el contenido espera mientras se arma la escena
+        animacionIntroYaEjecutada = true;
+        destino.classList.add('contenido-esperando');
+        destino.classList.remove('anim-contenido-entrada');
+        setTimeout(() => {
+            destino.classList.remove('contenido-esperando');
+            destino.classList.add('anim-contenido-entrada');
+        }, 4800);
+    } else {
+        destino.classList.remove('contenido-esperando');
+        destino.classList.add('anim-contenido-entrada');
     }
 }
 
@@ -255,6 +694,7 @@ function cambiarPanel(indicePanel) {
 // =====================================================================
 async function ejecutarLogin(e) {
     e.preventDefault();
+    if (!isOn) { performSimulatedPull(); return; }
     const email = $('login-email').value;
     const password = $('login-password').value;
 
@@ -290,6 +730,7 @@ async function ejecutarRegistro(e) {
         $('login-email').value = $('reg-email').value; // deja el correo listo en el login
         $('form-registro').reset();
         cerrarModal('modal-registro');
+        toast('Registro exitoso. Ya puedes iniciar sesión.');
         $('login-password').focus();
     } catch (err) {
         toast(err.message, 'error');
@@ -378,6 +819,7 @@ async function abrirBandejaAdmin() {
 async function aceptarReserva(id) {
     try {
         await api(`/api/reservas/${id}/aceptar`, { method: 'POST' });
+        toast('Reserva aceptada y registrada como préstamo.');
         actualizarContadorBandejaAdmin();
         abrirBandejaAdmin();
     } catch (err) { toast(err.message, 'error'); }
@@ -442,9 +884,8 @@ async function cargarCatalogo() {
             const enReparacion = item.estado_fisico === 'En reparación';
             const ocupado = ocupados.has(item.id);
 
-            const imagenHTML = item.imagen
-                ? `<img src="${esc(item.imagen)}" class="instrument-img" alt="${esc(item.nombre)}">`
-                : `<div class="instrument-img sin-foto" aria-hidden="true"><span>${emojiPorTipo(item.tipo)}</span></div>`;
+            const urlFoto = item.imagen || item.foto || obtenerImagenPorDefecto(item.nombre, item.tipo);
+            const imagenHTML = `<img src="${esc(urlFoto)}" class="instrument-img" alt="${esc(item.nombre)}" loading="lazy" data-emoji="${emojiPorTipo(item.tipo)}" onerror="fotoNoDisponible(this)">`;
 
             let badge, boton;
             if (enReparacion) {
@@ -657,6 +1098,7 @@ async function enviarReservaVirtual(e) {
             }
         });
         cerrarModal('modal-reserva');
+        toast('Reserva enviada. El administrador la revisará pronto.');
         $('form-reserva-virtual').reset();
         limpiarDatosTarjeta();
         cambiarMetodoPago();
@@ -755,7 +1197,8 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
 
     instrumentos.forEach((item) => {
         const opciones = ESTADOS_FISICOS.map((e) => `<option value="${esc(e)}" ${e === item.estado_fisico ? 'selected' : ''}>${esc(e)}</option>`).join('');
-        const foto = item.imagen ? `<img class="mini-foto" src="${esc(item.imagen)}" alt="">` : `<div class="mini-foto"></div>`;
+        const urlFoto = item.imagen || item.foto || obtenerImagenPorDefecto(item.nombre, item.tipo);
+        const foto = `<img class="mini-foto" src="${esc(urlFoto)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`;
         const disponibilidad = item.estado_fisico === 'En reparación'
             ? `<span class="badge badge-fix">En reparación</span>`
             : (ocupados.has(item.id) ? `<span class="badge badge-busy">En uso</span>` : `<span class="badge badge-ok">Disponible</span>`);
@@ -1048,6 +1491,7 @@ async function confirmarDevolucion(e) {
             }
         });
         cerrarModal('modal-devolucion');
+        toast(`Devolución registrada. Multa total: ${moneda(r.multa)}`);
         cargarPrestamosYDevoluciones();
     } catch (err) {
         toast(err.message, 'error');
@@ -1300,6 +1744,84 @@ function crearNotasDecorativas() {
         nota.style.setProperty('--g', `${random(5, 10)}s`);
         capa.appendChild(nota);
     }
+}
+
+// =====================================================================
+//  ESCENA NAVIDEÑA DE FONDO Y FOTOS POR DEFECTO
+// =====================================================================
+function inicializarEscenaNavidena() {
+    // Copos de nieve y estrellas: se crean una sola vez
+    const nieve = $('snow');
+    if (nieve && nieve.children.length === 0) {
+        for (let i = 0; i < 48; i++) {
+            const copo = document.createElement('span');
+            copo.className = 'flake';
+            const tam = 2.5 + ((i * 1.7) % 5);
+            copo.style.left = `${((i * 37.3) % 100).toFixed(2)}%`;
+            copo.style.width = `${tam}px`;
+            copo.style.height = `${tam}px`;
+            copo.style.opacity = (0.4 + ((i * 0.13) % 0.55)).toFixed(2);
+            copo.style.setProperty('--dur', `${7 + ((i * 2.3) % 9)}s`);
+            copo.style.animationDelay = `${-((i * 1.9) % 12)}s`;
+            nieve.appendChild(copo);
+        }
+    }
+    const cielo = $('stars');
+    if (cielo && cielo.children.length === 0) {
+        for (let i = 0; i < 30; i++) {
+            const estrella = document.createElement('span');
+            estrella.className = 'star';
+            const tam = 2 + (i % 3);
+            estrella.style.left = `${((i * 29.7 + 7) % 96 + 2).toFixed(2)}%`;
+            estrella.style.top = `${((i * 17.3 + 4) % 48 + 4).toFixed(2)}%`;
+            estrella.style.width = `${tam}px`;
+            estrella.style.height = `${tam}px`;
+            estrella.style.animationDelay = `${(i * 0.4) % 3}s`;
+            cielo.appendChild(estrella);
+        }
+    }
+
+    // Parallax: las capas siguen al cursor. Se escucha en toda la ventana porque
+    // la escena queda detrás del contenido y no recibe eventos del mouse.
+    if (!window.__parallaxNavidad) {
+        window.__parallaxNavidad = true;
+        const capas = document.querySelectorAll('#decoracion .parallax-wrap');
+        let nx = 0, ny = 0, pendiente = false;
+        const aplicar = () => {
+            pendiente = false;
+            capas.forEach((capa) => {
+                const profundidad = Number(capa.dataset.depth || 20);
+                capa.style.setProperty('--px', `${(-nx * profundidad).toFixed(1)}px`);
+                capa.style.setProperty('--py', `${(-ny * profundidad * 0.4).toFixed(1)}px`);
+            });
+        };
+        window.addEventListener('mousemove', (e) => {
+            nx = e.clientX / window.innerWidth - 0.5;
+            ny = e.clientY / window.innerHeight - 0.5;
+            if (!pendiente) { pendiente = true; requestAnimationFrame(aplicar); }
+        });
+    }
+}
+
+// Foto por defecto según el nombre o tipo del instrumento (necesita internet;
+// si no carga, se muestra el icono del instrumento)
+function obtenerImagenPorDefecto(nombre, tipo) {
+    const n = (nombre + ' ' + tipo).toLowerCase();
+    if (n.includes('guitarra')) return 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=600&q=80';
+    if (n.includes('violin') || n.includes('violín') || n.includes('violinchelo') || n.includes('violonchelo')) return 'https://images.unsplash.com/photo-1612225330812-01a9c6b355ec?auto=format&fit=crop&w=600&q=80';
+    if (n.includes('piano') || n.includes('teclado')) return 'https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?auto=format&fit=crop&w=600&q=80';
+    if (n.includes('saxo')) return 'https://images.unsplash.com/photo-1511192336575-5a79af67a629?auto=format&fit=crop&w=600&q=80';
+    if (n.includes('tambor') || n.includes('bateria') || n.includes('batería') || n.includes('percusion') || n.includes('percusión')) return 'https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?auto=format&fit=crop&w=600&q=80';
+    return 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=600&q=80';
+}
+
+// Si una foto no carga, se cambia por el icono del instrumento
+function fotoNoDisponible(img) {
+    const bloque = document.createElement('div');
+    bloque.className = 'instrument-img sin-foto';
+    bloque.setAttribute('aria-hidden', 'true');
+    bloque.innerHTML = `<span>${img.dataset.emoji || '🎵'}</span>`;
+    img.replaceWith(bloque);
 }
 
 // =====================================================================
