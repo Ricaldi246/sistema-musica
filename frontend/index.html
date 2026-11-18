@@ -236,8 +236,11 @@
         </main>
     </div>
 
-    <!-- ===================== CATÁLOGO ===================== -->
+<!-- ===================== CATÁLOGO ===================== -->
     <div id="vista-catalogo" style="display: none;">
+        <!-- Audio de fondo continuo para el catálogo -->
+        <audio id="audioFondoCatalogo" src="navidad2.mp3" loop preload="auto" volume="1.0"></audio>
+
         <header class="catalog-header">
             <div class="catalog-left">
                 <div id="nav-admin-catalogo"></div>
@@ -246,7 +249,44 @@
                     <p>Catálogo de instrumentos</p>
                 </div>
             </div>
-            <div class="auth-nav" id="auth-nav"></div>
+
+            <!--boton para el catalogo del usuario-->
+            <div class="catalog-right-actions" style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+                <!-- Botón de Silenciar / Activar Música -->
+                <button type="button" onclick="toggleMusicaCatalogo()" title="Silenciar / Activar música" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; transition: background 0.2s;">
+                    <svg class="catalog-sound-on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                    </svg>
+                    <svg class="catalog-sound-off hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <line x1="23" y1="9" x2="17" y2="15"></line>
+                        <line x1="17" y1="9" x2="23" y2="15"></line>
+                    </svg>
+                </button>
+
+                <div class="auth-nav" id="auth-nav" style="display: flex; align-items: center; gap: 10px;"></div>
+            </div>
+        </header>
+
+
+
+            <div class="auth-nav" id="auth-nav">
+                <!-- Botón de silenciar/activar música en la esquina superior derecha -->
+                <button class="sound-toggle" id="catalogSoundToggle" title="Silenciar / Activar música" aria-label="Toggle Catalog Sound" onclick="toggleMusicaCatalogo()">
+                    <svg class="sound-icon catalog-sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                    </svg>
+                    <svg class="sound-icon catalog-sound-off hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <line x1="23" y1="9" x2="17" y2="15"></line>
+                        <line x1="17" y1="9" x2="23" y2="15"></line>
+                    </svg>
+                </button>
+            </div>
         </header>
 
         <main id="catalogo-contenido">
@@ -620,18 +660,36 @@
         </div>
     </div>
 
-    <div id="modal-registro" class="modal-overlay">
-        <div class="modal-box">
-            <h3>Registro de Nuevo Usuario</h3>
-            <form id="form-registro" onsubmit="ejecutarRegistro(event)">
-                <input type="text" id="reg-nombre" placeholder="Nombre completo" required>
-                <input type="email" id="reg-email" placeholder="Correo electrónico" required>
-                <input type="password" id="reg-password" placeholder="Contraseña (mínimo 6 caracteres)" minlength="6" required>
-                <input type="text" id="reg-ci" placeholder="Carnet de Identidad (CI)" required>
-                <input type="text" id="reg-telefono" placeholder="Teléfono" required>
-                <button type="submit" class="btn btn-info btn-block">Registrarse</button>
-            </form>
-            <button class="btn btn-danger btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-registro')">Cerrar</button>
+<div id="modal-registro" class="modal-overlay">
+        <div class="modal-box" style="background: #f77171; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); overflow: hidden; padding: 0; max-width: 420px; width: 90%;">
+            
+            <!-- Encabezado con Estilo y Gradiente -->
+            <div style="background: linear-gradient(135deg, #f60303, #f40202); padding: 25px 20px; color: white; text-align: center;">
+                <div style="font-size: 32px; margin-bottom: 6px;">🎼</div>
+                <h3 style="margin: 0; font-size: 20px; font-weight: 700;">Registro de Nuevo Usuario</h3>
+                <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.85;">Únete a nuestra Academia de Música</p>
+            </div>
+
+            <!-- Cuerpo del Formulario con Espaciado y Estilos en Inputs -->
+            <div style="padding: 25px;">
+                <form id="form-registro" onsubmit="ejecutarRegistro(event)" style="display: flex; flex-direction: column; gap: 14px;">
+                    
+                    <input type="text" id="reg-nombre" placeholder="👤 Nombre completo" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    
+                    <input type="email" id="reg-email" placeholder="✉️ Correo electrónico" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    
+                    <input type="password" id="reg-password" placeholder="🔒 Contraseña (mínimo 6 caracteres)" minlength="6" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    
+                    <input type="text" id="reg-ci" placeholder="🆔 Carnet de Identidad (CI)" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    
+                    <input type="text" id="reg-telefono" placeholder="📱 Teléfono" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    
+                    <button type="submit" class="btn btn-info btn-block" style="margin-top: 5px; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #fb011a, #07c4f3); border: none; color: white; box-shadow: 0 4px 10px rgba(59,130,246,0.3);">Registrarse</button>
+                </form>
+
+                <button class="btn btn-danger btn-block" style="margin-top: 10px; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; width: 100%; background: #ef4444; border: none; color: white;" onclick="cerrarModal('modal-registro')">Cerrar</button>
+            </div>
+
         </div>
     </div>
 

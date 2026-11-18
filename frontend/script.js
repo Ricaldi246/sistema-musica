@@ -170,75 +170,21 @@ async function cargarConfig() {
     }
   }
 
-  function playElasticPluckSound(pullDist, turningOn) {
-    if (!isSoundEnabled) return;
-    try {
-      initAudio();
-      if (!audioCtx) return;
-
-      const now = audioCtx.currentTime;
-
-      // Pluck tone
-      const osc = audioCtx.createOscillator();
-      const oscGain = audioCtx.createGain();
-      osc.type = "triangle";
-
-      const startFreq = 480 + Math.min(260, pullDist * 3);
-      osc.frequency.setValueAtTime(startFreq, now);
-      osc.frequency.exponentialRampToValueAtTime(140, now + 0.12);
-
-      oscGain.gain.setValueAtTime(0.4, now);
-      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
-
-      osc.connect(oscGain);
-      oscGain.connect(audioCtx.destination);
-      osc.start(now);
-      osc.stop(now + 0.15);
-
-      // Switch snap
-      if (pullDist >= TRIGGER_PULL) {
-        const snap = audioCtx.createOscillator();
-        const snapGain = audioCtx.createGain();
-        snap.type = "sine";
-        snap.frequency.setValueAtTime(turningOn ? 1800 : 1500, now + 0.02);
-        snap.frequency.exponentialRampToValueAtTime(320, now + 0.06);
-
-        snapGain.gain.setValueAtTime(0.35, now + 0.02);
-        snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
-
-        snap.connect(snapGain);
-        snapGain.connect(audioCtx.destination);
-        snap.start(now + 0.02);
-        snap.stop(now + 0.07);
-
-        // Power hum
-        if (turningOn) {
-          const hum = audioCtx.createOscillator();
-          const humGain = audioCtx.createGain();
-          hum.type = "sine";
-          hum.frequency.setValueAtTime(120, now + 0.05);
-          humGain.gain.setValueAtTime(0.001, now);
-          humGain.gain.linearRampToValueAtTime(0.06, now + 0.08);
-          humGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-
-          hum.connect(humGain);
-          humGain.connect(audioCtx.destination);
-          hum.start(now + 0.05);
-          hum.stop(now + 0.38);
-        }
-      }
-    } catch (e) {
-      console.warn("AudioContext error:", e);
+function playElasticPluckSound(pullDist, turningOn) {
+  if (!isSoundEnabled) return;
+  try {
+    // Reproduce el archivo MP3 solo cuando se jala la cuerda lo suficiente para activar la lámpara
+    if (pullDist >= TRIGGER_PULL) {
+      const audio = new Audio('navidad.mp3');
+      audio.volume = 0.6; // Volumen (de 0.0 a 1.0)
+      audio.play().catch(e => {
+        console.warn("El navegador bloqueó la reproducción automática:", e);
+      });
     }
+  } catch (e) {
+    console.warn("Audio error:", e);
   }
-
-  // Sound Toggle
-  soundToggle.addEventListener("click", () => {
-    isSoundEnabled = !isSoundEnabled;
-    soundOnIcon.classList.toggle("hidden", !isSoundEnabled);
-    soundOffIcon.classList.toggle("hidden", isSoundEnabled);
-    if (isSoundEnabled) initAudio();
-  });
+}
 
   function playColorSwitchSound() {
     if (!isSoundEnabled) return;
@@ -608,6 +554,13 @@ function mostrarVista(nombre) {
     vistaAdm.style.display = nombre === 'admin' ? 'block' : 'none';
     if (nombre !== 'login') setLamp(false); // apaga las luciérnagas fuera del login
 
+    // Control de música de fondo según la vista
+    if (nombre === 'catalogo') {
+        iniciarMusicaCatalogo();
+    } else {
+        detenerMusicaCatalogo();
+    }
+
     const capa = $('decoracion');
     if (!capa) return;
     capa.hidden = nombre === 'login';
@@ -620,7 +573,6 @@ function mostrarVista(nombre) {
     const menosMovimiento = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (!animacionIntroYaEjecutada && !menosMovimiento) {
-        // Primera vez después de iniciar sesión: el contenido espera mientras se arma la escena
         animacionIntroYaEjecutada = true;
         destino.classList.add('contenido-esperando');
         destino.classList.remove('anim-contenido-entrada');
@@ -1838,13 +1790,91 @@ cargarConfig();
 
 (function iniciarApp() {
     const sesion = getSesion();
-    if (sesion && sesion.usuario && sesion.usuario.tipo === 'admin') {
-        mostrarPaginaAdmin();
-    } else if (sesion && sesion.usuario) {
-        verificarSesionUI();
-        volverAlCatalogo();
-    } else {
-        mostrarVista('login');
-        setLamp(false);
-    }
+    
+    // Usamos un pequeño retardo para asegurar que el navegador cargue los estilos CSS primero
+    setTimeout(() => {
+        if (sesion && sesion.usuario && sesion.usuario.tipo === 'admin') {
+            mostrarPaginaAdmin();
+        } else if (sesion && sesion.usuario) {
+            verificarSesionUI();
+            if (typeof volverAlCatalogo === 'function') {
+                volverAlCatalogo();
+            } else {
+                mostrarVista('catalogo');
+            }
+            iniciarMusicaCatalogo();
+        } else {
+            mostrarVista('login');
+            detenerMusicaCatalogo();
+            setLamp(false);
+        }
+    }, 50); // 50 milisegundos de respiro para que el CSS no falle
 })();
+
+// // =====================================================================
+//  CONTROL DEFINITIVO DE MÚSICA EN EL CATÁLOGO (navidad2.mp3)
+// =====================================================================
+
+// Leer si el usuario había silenciado la música antes
+let musicaSilenciada = localStorage.getItem('musica_silenciada') === 'true';
+
+function iniciarMusicaCatalogo() {
+    const audio = $('audioFondoCatalogo');
+    if (!audio) return;
+    
+    audio.volume = 1.0; // Volumen al 80%
+
+    if (!musicaSilenciada) {
+        audio.play().then(() => {
+            actualizarIconosBocina(false);
+        }).catch(e => {
+            console.log("El navegador bloqueó el autoplay en frío. Esperando primer clic...");
+        });
+    } else {
+        audio.pause();
+        actualizarIconosBocina(true);
+    }
+}
+
+function detenerMusicaCatalogo() {
+    const audio = $('audioFondoCatalogo');
+    if (!audio) return;
+    audio.pause();
+}
+
+function toggleMusicaCatalogo() {
+    const audio = $('audioFondoCatalogo');
+    if (!audio) return;
+
+    musicaSilenciada = !musicaSilenciada;
+    localStorage.setItem('musica_silenciada', musicaSilenciada);
+
+    if (musicaSilenciada) {
+        audio.pause();
+        actualizarIconosBocina(true);
+    } else {
+        audio.play().catch(e => console.log(e));
+        actualizarIconosBocina(false);
+    }
+}
+
+function actualizarIconosBocina(silenciado) {
+    const iconoOn = document.querySelector('.catalog-sound-on');
+    const iconoOff = document.querySelector('.catalog-sound-off');
+    if (iconoOn) iconoOn.style.display = silenciado ? 'none' : 'block';
+    if (iconoOff) iconoOff.style.display = silenciado ? 'block' : 'none';
+}
+
+// MAGIA PURA: En cuanto recargues (F5) y hagas un solo clic en cualquier parte, la música arranca sola
+document.addEventListener('click', function desbloquearAudioPorClickOnce() {
+    const audio = $('audioFondoCatalogo');
+    const vistaCat = $('vista-catalogo');
+    
+    // Si estamos en el catálogo, el audio está pausado y no está silenciado por el usuario
+    if (vistaCat && vistaCat.style.display !== 'none' && audio && audio.paused && !musicaSilenciada) {
+        audio.volume = 0.8;
+        audio.play().then(() => {
+            actualizarIconosBocina(false);
+        }).catch(err => console.log("Aún esperando interacción"));
+    }
+}, { once: true }); // Se rearma inteligentemente
