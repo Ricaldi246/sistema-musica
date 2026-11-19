@@ -184,22 +184,36 @@ async function hayConflicto(instrumentoId, salida, limite, excluirReservaId = 0)
 }
 
 async function asegurarAdminInicial() {
+    const emailAdmin = String(
+        process.env.ADMIN_EMAIL || 'admin@academia.com'
+    ).trim().toLowerCase();
+
+    const passwordAdmin = process.env.ADMIN_PASSWORD;
+
     const { data: admin, error } = await supabase
         .from('usuarios')
         .select('id')
-        .eq('email', 'admin@academia.com')
+        .eq('email', emailAdmin)
         .maybeSingle();
+
     if (error) throw error;
 
     if (!admin) {
+        if (!passwordAdmin || passwordAdmin.length < 12) {
+            throw new Error(
+                'Configura ADMIN_PASSWORD con al menos 12 caracteres.'
+            );
+        }
+
         const { error: errInsert } = await supabase
             .from('usuarios')
             .insert([{
                 nombre: 'Administrador Principal',
-                email: 'admin@academia.com',
-                password: hashPassword('admin123'),
+                email: emailAdmin,
+                password: hashPassword(passwordAdmin),
                 tipo: 'admin'
             }]);
+
         if (errInsert) throw errInsert;
     }
 }
