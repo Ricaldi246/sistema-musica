@@ -170,14 +170,15 @@ async function cargarConfig() {
     }
   }
 
+const audioLampara = new Audio('navidad.mp3');
+audioLampara.volume = 0.6;
+
 function playElasticPluckSound(pullDist, turningOn) {
   if (!isSoundEnabled) return;
   try {
-    // Reproduce el archivo MP3 solo cuando se jala la cuerda lo suficiente para activar la lámpara
     if (pullDist >= TRIGGER_PULL) {
-      const audio = new Audio('navidad.mp3');
-      audio.volume = 0.6; // Volumen (de 0.0 a 1.0)
-      audio.play().catch(e => {
+      audioLampara.currentTime = 0;
+      audioLampara.play().catch(e => {
         console.warn("El navegador bloqueó la reproducción automática:", e);
       });
     }
@@ -564,7 +565,9 @@ function mostrarVista(nombre) {
     const capa = $('decoracion');
     if (!capa) return;
     capa.hidden = nombre === 'login';
-    capa.className = `decoracion vista-${nombre}`;
+    const mesActual = new Date().getMonth() + 1;
+    const mesClase = `mes-${pad(mesActual)}`;
+    capa.className = `decoracion vista-${nombre} ${mesClase}`;
 
     if (nombre === 'login') { animacionIntroYaEjecutada = false; return; }
 
@@ -696,10 +699,15 @@ function verificarSesionUI() {
     if (!(sesion && sesion.usuario && nav)) return;
 
     const esAdmin = sesion.usuario.tipo === 'admin';
+    const avatarActual = obtenerAvatarUsuario(sesion.usuario);
+
     nav.innerHTML = `
         ${esAdmin ? '' : '<button class="btn btn-dark" onclick="abrirBandejaCliente()">✉️ Mis Notificaciones</button>'}
         <button class="btn btn-dark" onclick="abrirModalPassword()" title="Cambiar mi contraseña">🔑 Contraseña</button>
-        <span class="usuario-nombre">👤 ${esc(sesion.usuario.nombre)}</span>
+        <button type="button" class="btn-usuario-perfil" onclick="abrirModalPerfil()" title="Ver mi perfil y cambiar avatar">
+            <img class="perfil-mini-avatar" src="${esc(avatarActual.src)}" alt="${esc(avatarActual.nombre)}">
+            <span>${esc(sesion.usuario.nombre)}</span>
+        </button>
         <button class="btn btn-danger" onclick="cerrarSesionCliente()">Salir</button>
     `;
     // Solo el administrador ve este botón, arriba a la izquierda
@@ -1702,9 +1710,11 @@ function crearNotasDecorativas() {
 //  ESCENA NAVIDEÑA DE FONDO Y FOTOS POR DEFECTO
 // =====================================================================
 function inicializarEscenaNavidena() {
-    // Copos de nieve y estrellas: se crean una sola vez
+    const esDiciembre = new Date().getMonth() === 11;
+
+    // Copos de nieve y estrellas: solo en diciembre y se crean una sola vez
     const nieve = $('snow');
-    if (nieve && nieve.children.length === 0) {
+    if (esDiciembre && nieve && nieve.children.length === 0) {
         for (let i = 0; i < 48; i++) {
             const copo = document.createElement('span');
             copo.className = 'flake';
@@ -1718,6 +1728,7 @@ function inicializarEscenaNavidena() {
             nieve.appendChild(copo);
         }
     }
+
     const cielo = $('stars');
     if (cielo && cielo.children.length === 0) {
         for (let i = 0; i < 30; i++) {
@@ -1733,8 +1744,7 @@ function inicializarEscenaNavidena() {
         }
     }
 
-    // Parallax: las capas siguen al cursor. Se escucha en toda la ventana porque
-    // la escena queda detrás del contenido y no recibe eventos del mouse.
+    // Parallax: las capas siguen al cursor
     if (!window.__parallaxNavidad) {
         window.__parallaxNavidad = true;
         const capas = document.querySelectorAll('#decoracion .parallax-wrap');
@@ -1752,6 +1762,47 @@ function inicializarEscenaNavidena() {
             ny = e.clientY / window.innerHeight - 0.5;
             if (!pendiente) { pendiente = true; requestAnimationFrame(aplicar); }
         });
+    }
+
+    inicializarTematicaMes();
+}
+
+function inicializarTematicaMes() {
+    const mes = new Date().getMonth() + 1;
+    const cont = $('mes-particulas');
+    if (!cont || cont.dataset.mesCargado === String(mes)) return;
+    cont.dataset.mesCargado = String(mes);
+    cont.innerHTML = '';
+
+    if (mes === 12) return; // Diciembre usa la escena navideña completa
+
+    const configs = {
+        1:  { items: ['🎆', '🎇', '✨', '🎉', '🥂'], anim: 'subirYEstallar', count: 28 },
+        2:  { items: ['🎊', '🎉', '🎭', '🎶', '✨'], anim: 'caerGirando', count: 32 },
+        3:  { items: ['🌱', '🌸', '🍃', '📚', '🎵'], anim: 'caerGirando', count: 26 },
+        4:  { items: ['🌅', '✨', '🎸', '☀️', '🎶'], anim: 'subirYEstallar', count: 24 },
+        5:  { items: ['💐', '🌷', '💖', '🌸', '🎶'], anim: 'caerGirando', count: 26 },
+        6:  { items: ['⭐', '❄️', '🌙', '✨', '🌌'], anim: 'caerGirando', count: 28 },
+        7:  { items: ['🎈', '🎉', '🎺', '✨', '🥳'], anim: 'subirYEstallar', count: 26 },
+        8:  { items: ['🍃', '💨', '🪁', '🌤️', '🎵'], anim: 'caerGirando', count: 26 },
+        9:  { items: ['🌼', '🌻', '🦋', '🌿', '🎶'], anim: 'caerGirando', count: 28 },
+        10: { items: ['🕯️', '🔮', '🦇', '✨', '🌙'], anim: 'cruzarHalloween', count: 22 },
+        11: { items: ['🎃', '🦇', '👻', '🕸️', '🕯️'], anim: 'cruzarHalloween', count: 26 }
+    };
+
+    const cfg = configs[mes] || configs[3];
+    for (let i = 0; i < cfg.count; i++) {
+        const el = document.createElement('span');
+        el.className = 'particula-mes';
+        el.textContent = cfg.items[i % cfg.items.length];
+        el.style.fontSize = `${random(1.2, 2.3).toFixed(2)}rem`;
+        el.style.left = `${random(2, 95).toFixed(1)}%`;
+        el.style.setProperty('--dx', `${random(-45, 45).toFixed(0)}px`);
+        el.style.setProperty('--top-y', `${random(10, 75).toFixed(0)}vh`);
+        const dur = random(6, 13).toFixed(1);
+        const delay = (-random(0, 10)).toFixed(1);
+        el.style.animation = `${cfg.anim} ${dur}s linear ${delay}s infinite`;
+        cont.appendChild(el);
     }
 }
 
@@ -1821,14 +1872,14 @@ let musicaSilenciada = localStorage.getItem('musica_silenciada') === 'true';
 function iniciarMusicaCatalogo() {
     const audio = $('audioFondoCatalogo');
     if (!audio) return;
-    
-    audio.volume = 1.0; // Volumen al 80%
+
+    audio.volume = 0.8;
 
     if (!musicaSilenciada) {
         audio.play().then(() => {
             actualizarIconosBocina(false);
-        }).catch(e => {
-            console.log("El navegador bloqueó el autoplay en frío. Esperando primer clic...");
+        }).catch(() => {
+            console.log("El navegador bloqueó el autoplay en frío. Esperando interacción...");
         });
     } else {
         audio.pause();
@@ -1866,15 +1917,135 @@ function actualizarIconosBocina(silenciado) {
 }
 
 // MAGIA PURA: En cuanto recargues (F5) y hagas un solo clic en cualquier parte, la música arranca sola
-document.addEventListener('click', function desbloquearAudioPorClickOnce() {
+document.addEventListener('click', function desbloquearAudioCatalogo() {
     const audio = $('audioFondoCatalogo');
     const vistaCat = $('vista-catalogo');
-    
-    // Si estamos en el catálogo, el audio está pausado y no está silenciado por el usuario
+
     if (vistaCat && vistaCat.style.display !== 'none' && audio && audio.paused && !musicaSilenciada) {
         audio.volume = 0.8;
         audio.play().then(() => {
             actualizarIconosBocina(false);
-        }).catch(err => console.log("Aún esperando interacción"));
+        }).catch(() => {});
     }
-}, { once: true }); // Se rearma inteligentemente
+});
+
+// =====================================================================
+//  PERFIL DE USUARIO Y 10 AVATARES
+// =====================================================================
+function crearAvatarSvgDataUrl(bgInicio, bgFin, acento, estilo = 0) {
+    const accesorios = [
+        `<circle cx="32" cy="24" r="11" fill="#fde68a"/><path d="M14 54c1-11 8-17 18-17s17 6 18 17" fill="#ffffff"/>`,
+        `<circle cx="32" cy="24" r="11" fill="#fed7aa"/><path d="M14 54c1-11 8-17 18-17s17 6 18 17" fill="#fef08a"/><path d="M21 19c2-6 19-6 22 0" stroke="#78350f" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+        `<circle cx="32" cy="25" r="10.5" fill="#fbcfe8"/><path d="M15 54c1-10 8-16 17-16s16 6 17 16" fill="#f5d0fe"/><circle cx="22" cy="15" r="4" fill="#ffffff"/>`,
+        `<circle cx="32" cy="24" r="11" fill="#bae6fd"/><path d="M14 54c1-11 8-17 18-17s17 6 18 17" fill="#e0f2fe"/><rect x="20" y="12" width="24" height="5" rx="2.5" fill="#ffffff"/>`,
+        `<circle cx="32" cy="24" r="11" fill="#bbf7d0"/><path d="M14 54c1-11 8-17 18-17s17 6 18 17" fill="#dcfce7"/><path d="M24 37l8 6 8-6" stroke="#ffffff" stroke-width="2.5" fill="none"/>`
+    ];
+    const extra = estilo >= 5
+        ? `<circle cx="46" cy="18" r="6" fill="#ffffff" opacity="0.9"/><path d="M44.5 15.5v4.5m0-4.5l3 1" stroke="${acento}" stroke-width="1.5" stroke-linecap="round"/>`
+        : `<circle cx="46" cy="18" r="5" fill="#ffffff" opacity="0.85"/>`;
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="${bgInicio}"/>
+                <stop offset="100%" stop-color="${bgFin}"/>
+            </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="32" fill="url(#g)"/>
+        ${accesorios[estilo % accesorios.length]}
+        ${extra}
+    </svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+const AVATARES_DISPONIBLES = [
+    { id: 'av-1', nombre: 'Ámbar', src: crearAvatarSvgDataUrl('#f59e0b', '#ea580c', '#ea580c', 0) },
+    { id: 'av-2', nombre: 'Cielo', src: crearAvatarSvgDataUrl('#0ea5e9', '#2563eb', '#2563eb', 1) },
+    { id: 'av-3', nombre: 'Coral', src: crearAvatarSvgDataUrl('#f43f5e', '#db2777', '#db2777', 2) },
+    { id: 'av-4', nombre: 'Esmeralda', src: crearAvatarSvgDataUrl('#10b981', '#059669', '#059669', 3) },
+    { id: 'av-5', nombre: 'Lila', src: crearAvatarSvgDataUrl('#8b5cf6', '#6d28d9', '#6d28d9', 4) },
+    { id: 'av-6', nombre: 'Sol', src: crearAvatarSvgDataUrl('#eab308', '#d97706', '#d97706', 5) },
+    { id: 'av-7', nombre: 'Turquesa', src: crearAvatarSvgDataUrl('#06b6d4', '#0284c7', '#0284c7', 6) },
+    { id: 'av-8', nombre: 'Rubí', src: crearAvatarSvgDataUrl('#ef4444', '#b91c1c', '#b91c1c', 7) },
+    { id: 'av-9', nombre: 'Menta', src: crearAvatarSvgDataUrl('#34d399', '#0d9488', '#0d9488', 8) },
+    { id: 'av-10', nombre: 'Índigo', src: crearAvatarSvgDataUrl('#6366f1', '#4338ca', '#4338ca', 9) }
+];
+
+let avatarSeleccionadoTemp = null;
+
+function claveAvatarUsuario(usuario) {
+    const identificador = (usuario && (usuario.id || usuario.email || usuario.nombre)) || 'anonimo';
+    return `avatar_usuario_${String(identificador).toLowerCase()}`;
+}
+
+function obtenerAvatarUsuario(usuario) {
+    const clave = claveAvatarUsuario(usuario);
+    const guardadoId = localStorage.getItem(clave);
+    return AVATARES_DISPONIBLES.find((a) => a.id === guardadoId) || AVATARES_DISPONIBLES[0];
+}
+
+function renderizarGaleriaAvatares() {
+    const grid = $('perfil-galeria-avatares');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    AVATARES_DISPONIBLES.forEach((av) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `avatar-opcion${avatarSeleccionadoTemp && avatarSeleccionadoTemp.id === av.id ? ' seleccionado' : ''}`;
+        btn.innerHTML = `
+            <img src="${esc(av.src)}" alt="${esc(av.nombre)}">
+            <span>${esc(av.nombre)}</span>
+        `;
+        btn.addEventListener('click', () => {
+            avatarSeleccionadoTemp = av;
+            const imgGrande = $('perfil-avatar-actual');
+            if (imgGrande) {
+                imgGrande.src = av.src;
+                imgGrande.alt = av.nombre;
+            }
+            renderizarGaleriaAvatares();
+        });
+        grid.appendChild(btn);
+    });
+}
+
+function abrirModalPerfil() {
+    const sesion = getSesion();
+    if (!sesion || !sesion.usuario) {
+        toast('Inicia sesión para ver tu perfil.', 'error');
+        return;
+    }
+    const u = sesion.usuario;
+    const actual = obtenerAvatarUsuario(u);
+    avatarSeleccionadoTemp = actual;
+
+    const imgGrande = $('perfil-avatar-actual');
+    if (imgGrande) {
+        imgGrande.src = actual.src;
+        imgGrande.alt = actual.nombre;
+    }
+
+    const datosEl = $('perfil-datos-lista');
+    if (datosEl) {
+        datosEl.innerHTML = `
+            <p><strong>Nombre:</strong> ${esc(u.nombre || '—')}</p>
+            <p><strong>Correo:</strong> ${esc(u.email || u.correo || '—')}</p>
+            <p><strong>CI:</strong> ${esc(u.ci || '—')}</p>
+            <p><strong>Teléfono:</strong> ${esc(u.telefono || '—')}</p>
+            <p><strong>Rol:</strong> ${esc(u.tipo || 'Usuario')}</p>
+        `;
+    }
+
+    renderizarGaleriaAvatares();
+    abrirModal('modal-perfil-usuario');
+}
+
+function guardarAvatarPerfil() {
+    const sesion = getSesion();
+    if (!sesion || !sesion.usuario || !avatarSeleccionadoTemp) return;
+    localStorage.setItem(claveAvatarUsuario(sesion.usuario), avatarSeleccionadoTemp.id);
+    verificarSesionUI();
+    cerrarModal('modal-perfil-usuario');
+    toast(`Avatar "${avatarSeleccionadoTemp.nombre}" guardado.`);
+}

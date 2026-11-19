@@ -237,9 +237,10 @@
     </div>
 
 <!-- ===================== CATÁLOGO ===================== -->
+<!-- ===================== CATÁLOGO ===================== -->
     <div id="vista-catalogo" style="display: none;">
         <!-- Audio de fondo continuo para el catálogo -->
-        <audio id="audioFondoCatalogo" src="navidad2.mp3" loop preload="auto" volume="1.0"></audio>
+        <audio id="audioFondoCatalogo" src="navidad2.mp3" loop preload="auto"></audio>
 
         <header class="catalog-header">
             <div class="catalog-left">
@@ -250,9 +251,8 @@
                 </div>
             </div>
 
-            <!--boton para el catalogo del usuario-->
             <div class="catalog-right-actions" style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
-                <!-- Botón de Silenciar / Activar Música -->
+                <!-- Botón único de Silenciar / Activar Música -->
                 <button type="button" onclick="toggleMusicaCatalogo()" title="Silenciar / Activar música" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; transition: background 0.2s;">
                     <svg class="catalog-sound-on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -314,6 +314,8 @@
       <section class="scene" id="home" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1;">
         <div class="stars" id="stars"></div>
         <div class="snow" id="snow"></div>
+
+        <div class="mes-particulas" id="mes-particulas"></div>
 
         <!-- Paso 1: Montañas y Árboles del fondo -->
         <div class="parallax-wrap layer-mountains anim-step-1" data-depth="18">
@@ -763,6 +765,24 @@
             <h3>Escanea para pagar</h3>
             <img id="qr-pantalla-img" class="qr-grande" alt="Código QR de pago">
             <p class="nota">Toca en cualquier parte para cerrar.</p>
+        </div>
+    </div>
+
+    <div id="modal-perfil-usuario" class="modal-overlay">
+        <div class="modal-box modal-perfil-box">
+            <h3>👤 Perfil de Usuario</h3>
+            <div class="perfil-cabecera">
+                <img id="perfil-avatar-actual" class="perfil-avatar-grande" src="" alt="Avatar del usuario">
+                <div id="perfil-datos-lista" class="perfil-datos"></div>
+            </div>
+
+            <div class="perfil-selector-seccion">
+                <label>Elige uno de los 10 avatares:</label>
+                <div id="perfil-galeria-avatares" class="perfil-grid-avatares"></div>
+            </div>
+
+            <button type="button" class="btn btn-success btn-block" onclick="guardarAvatarPerfil()">Guardar avatar</button>
+            <button type="button" class="btn btn-gray btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-perfil-usuario')">Cerrar</button>
         </div>
     </div>
 

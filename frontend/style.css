@@ -97,18 +97,7 @@ button, input, select, textarea {
   padding: 0;
 }
 
-html,
-body {
-  width: 100%;
-  min-height: 100vh;
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-dark);
-  color: var(--text-primary);
-  overflow-x: hidden;
-  position: relative;
-  transition: background-color 0.8s ease;
-  user-select: none;
-}
+
 
 body[data-on="true"] {
   background-color: var(--bg-illuminated);
@@ -502,7 +491,7 @@ body[data-on="true"] .cord-tooltip {
   border: 1px solid var(--card-border);
   border-radius: 30px;
   padding: 2.5rem 2.2rem;
-  box-shadow: 0 2.5px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
   position: relative;
   overflow: hidden;
   transform: translateY(24px) scale(0.96);
@@ -1636,4 +1625,250 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   .flake { display: none; }
   .star { animation: none; }
   .anim-contenido-entrada { animation: none; opacity: 1; transform: none; }
+}
+
+#vista-catalogo .sound-toggle,
+#vista-admin .sound-toggle {
+  display: none !important;
+}
+
+/* ===================== PERFIL DE USUARIO Y AVATARES ===================== */
+.btn-usuario-perfil {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-weight: 700;
+  padding: 0.42rem 0.75rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.btn-usuario-perfil:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.perfil-mini-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.modal-perfil-box {
+  max-width: 520px;
+}
+
+.perfil-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.perfil-avatar-grande {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+  border: 3px solid #6c5ce7;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.perfil-datos {
+  flex: 1;
+  min-width: 200px;
+}
+
+.perfil-datos p {
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+  color: #2d3436;
+}
+
+.perfil-selector-seccion {
+  margin-bottom: 14px;
+}
+
+.perfil-grid-avatares {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.avatar-opcion {
+  border: 2px solid #e2e8f0;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: border-color 0.2s ease, transform 0.15s ease, background 0.2s ease;
+}
+
+.avatar-opcion:hover {
+  border-color: #6c5ce7;
+  transform: translateY(-2px);
+}
+
+.avatar-opcion.seleccionado {
+  border-color: #27ae60;
+  background: #eafaf1;
+  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.2);
+}
+
+.avatar-opcion img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.avatar-opcion span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+@media (max-width: 520px) {
+  .perfil-grid-avatares {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* =====================================================================
+   TEMÁTICAS ANIMADAS POR MES (mes-01 a mes-12; mes-12 = Navidad)
+   ===================================================================== */
+.mes-particulas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.particula-mes {
+  position: absolute;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Cuando NO es diciembre, ocultamos las capas estáticas navideñas y mostramos las del mes */
+.decoracion:not(.mes-12) .layer-mountains,
+.decoracion:not(.mes-12) .layer-pines,
+.decoracion:not(.mes-12) .layer-houses,
+.decoracion:not(.mes-12) .layer-tree,
+.decoracion:not(.mes-12) .layer-santa,
+.decoracion:not(.mes-12) .layer-snow-back,
+.decoracion:not(.mes-12) .layer-snow-front,
+.decoracion:not(.mes-12) .snow {
+  display: none;
+}
+
+.decoracion.mes-12 .mes-particulas {
+  display: none;
+}
+
+/* Fondos de cada mes (1 a 11) */
+.decoracion.mes-01 {
+  background: radial-gradient(circle at 50% 35%, #1e1b4b 0%, #0f172a 65%, #020617 100%);
+}
+.decoracion.mes-02 {
+  background: linear-gradient(135deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+  background-size: 300% 300%;
+  animation: fondoSuave 16s ease infinite;
+}
+.decoracion.mes-03 {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0, #fef3c7, #e0f2fe);
+  background-size: 300% 300%;
+  animation: fondoSuave 20s ease infinite;
+}
+.decoracion.mes-04 {
+  background: linear-gradient(135deg, #ffedd5, #fed7aa, #fde68a, #fae8ff);
+  background-size: 300% 300%;
+  animation: fondoSuave 20s ease infinite;
+}
+.decoracion.mes-05 {
+  background: linear-gradient(135deg, #fce7f3, #fbcfe8, #fef9c3, #e0e7ff);
+  background-size: 300% 300%;
+  animation: fondoSuave 20s ease infinite;
+}
+.decoracion.mes-06 {
+  background: radial-gradient(circle at 50% 30%, #1d4ed8 0%, #0f172a 70%, #020617 100%);
+}
+.decoracion.mes-07 {
+  background: linear-gradient(135deg, #fee2e2, #fef3c7, #dcfce7, #ffedd5);
+  background-size: 300% 300%;
+  animation: fondoSuave 18s ease infinite;
+}
+.decoracion.mes-08 {
+  background: linear-gradient(135deg, #e0f2fe, #bae6fd, #fef9c3, #d1fae5);
+  background-size: 300% 300%;
+  animation: fondoSuave 18s ease infinite;
+}
+.decoracion.mes-09 {
+  background: linear-gradient(135deg, #dcfce7, #fef08a, #ffedd5, #e0f2fe);
+  background-size: 300% 300%;
+  animation: fondoSuave 18s ease infinite;
+}
+.decoracion.mes-10 {
+  background: radial-gradient(circle at 50% 35%, #4c1d95 0%, #2e1065 65%, #1e1b4b 100%);
+}
+.decoracion.mes-11 {
+  background: radial-gradient(circle at 50% 35%, #7c2d12 0%, #3b0764 68%, #09090b 100%);
+}
+
+/* Movimientos divertidos */
+@keyframes subirYEstallar {
+  0%   { transform: translate3d(0, 105vh, 0) scale(0.5); opacity: 0; }
+  20%  { opacity: 1; }
+  75%  { transform: translate3d(var(--dx, 20px), 25vh, 0) scale(1.25); opacity: 1; }
+  100% { transform: translate3d(calc(var(--dx, 20px) * 1.6), 10vh, 0) scale(1.8); opacity: 0; }
+}
+
+@keyframes caerGirando {
+  0%   { transform: translate3d(0, -8vh, 0) rotate(0deg); opacity: 0.95; }
+  50%  { transform: translate3d(var(--dx, 35px), 50vh, 0) rotate(180deg); opacity: 1; }
+  100% { transform: translate3d(calc(var(--dx, 35px) * -0.5), 108vh, 0) rotate(360deg); opacity: 0.85; }
+}
+
+@keyframes cruzarHalloween {
+  0%   { transform: translate3d(-12vw, var(--top-y, 20vh), 0) rotate(-6deg); opacity: 0; }
+  15%  { opacity: 0.95; }
+  50%  { transform: translate3d(50vw, calc(var(--top-y, 20vh) - 24px), 0) rotate(6deg); }
+  85%  { opacity: 0.95; }
+  100% { transform: translate3d(112vw, calc(var(--top-y, 20vh) + 12px), 0) rotate(-4deg); opacity: 0; }
+}
+
+/* Contraste de texto en fondos oscuros (Enero, Junio, Octubre, Noviembre) */
+.decoracion.mes-01 ~ #vista-catalogo .hero-texto h2,
+.decoracion.mes-06 ~ #vista-catalogo .hero-texto h2,
+.decoracion.mes-10 ~ #vista-catalogo .hero-texto h2,
+.decoracion.mes-11 ~ #vista-catalogo .hero-texto h2 {
+  background: linear-gradient(90deg, #ffffff, #fde68a, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.decoracion.mes-01 ~ #vista-catalogo .hero-texto p,
+.decoracion.mes-06 ~ #vista-catalogo .hero-texto p,
+.decoracion.mes-10 ~ #vista-catalogo .hero-texto p,
+.decoracion.mes-11 ~ #vista-catalogo .hero-texto p {
+  color: #f8fafc;
 }
