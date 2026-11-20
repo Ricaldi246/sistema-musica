@@ -339,6 +339,23 @@ app.get('/api/instrumentos', ruta(async (req, res) => {
     res.json(data || []);
 }));
 
+app.get('/api/instrumentos/:id', autenticar, ruta(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID de instrumento no válido.' });
+    }
+
+    const { data, error } = await supabase
+        .from('instrumentos')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Instrumento no encontrado.' });
+
+    res.json(data);
+}));
+
 app.get('/api/disponibilidad', ruta(async (req, res) => {
     const { data, error } = await supabase
         .from('prestamos')
@@ -393,22 +410,75 @@ app.post('/api/instrumentos', autenticar, soloAdmin, ruta(async (req, res) => {
 }));
 
 app.put('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
-    const { estado_fisico } = req.body;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID de instrumento no válido.' });
+    }
+
+    const { data: actual, error: errBus } = await supabase
+        .from('instrumentos')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+    if (errBus) throw errBus;
+    if (!actual) return res.status(404).json({ error: 'Instrumento no encontrado.' });
+
+    const estado_fisico = req.body.estado_fisico !== undefined
+        ? req.body.estado_fisico
+        : actual.estado_fisico;
     if (!ESTADOS_FISICOS.includes(estado_fisico)) {
         return res.status(400).json({ error: 'Estado físico no válido.' });
     }
 
-    const { data, error } = await supabase
-        .from('instrumentos')
-        .update({ estado_fisico })
-        .eq('id', req.params.id)
-        .select('id')
-        .maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Instrumento no encontrado.' });
+    const nombre = req.body.nombre !== undefined
+        ? String(req.body.nombre || '').trim()
+        : actual.nombre;
+    const tipo = req.body.tipo !== undefined
+        ? String(req.body.tipo || '').trim()
+        : actual.tipo;
+    const numero_serie = req.body.numero_serie !== undefined
+        ? String(req.body.numero_serie || '').trim()
+        : actual.numero_serie;
 
-    await registrarMovimiento('INSTRUMENTO', `Instrumento #${req.params.id} cambió a "${estado_fisico}"`, req.usuario.nombre);
-    res.json({ mensaje: 'Estado actualizado' });
+    if (!nombre || !tipo || !numero_serie) {
+        return res.status(400).json({ error: 'Nombre, tipo y número de serie son obligatorios.' });
+    }
+
+    if (numero_serie !== actual.numero_serie) {
+        const { data: dup, error: errDup } = await supabase
+            .from('instrumentos')
+            .select('id')
+            .eq('numero_serie', numero_serie)
+            .neq('id', id)
+            .maybeSingle();
+        if (errDup) throw errDup;
+        if (dup) {
+            return res.status(400).json({ error: 'Ya existe otro instrumento con ese número de serie.' });
+        }
+    }
+
+    const cambios = { nombre, tipo, numero_serie, estado_fisico };
+
+    if (req.body.imagen !== undefined) {
+        const imagen = String(req.body.imagen || '');
+        if (imagen && !imagen.startsWith('data:image/')) {
+            return res.status(400).json({ error: 'La imagen no es válida.' });
+        }
+        cambios.imagen = imagen;
+    }
+
+    const { error } = await supabase
+        .from('instrumentos')
+        .update(cambios)
+        .eq('id', id);
+    if (error) throw error;
+
+    await registrarMovimiento(
+        'INSTRUMENTO',
+        `Instrumento #${id} ("${nombre}", serie ${numero_serie}) actualizado — Estado: "${estado_fisico}"`,
+        req.usuario.nombre
+    );
+    res.json({ mensaje: 'Instrumento actualizado con éxito' });
 }));
 
 app.delete('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
@@ -533,21 +603,23 @@ app.get('/api/mis-reservas', autenticar, ruta(async (req, res) => {
 }));
 
 app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, res) => {
-    const { data: reserva } = await supabase
+    const { data: reserva, error: errRes } = await supabase
         .from('reservas_virtuales')
         .select('*')
         .eq('id', req.params.id)
         .maybeSingle();
+    if (errRes) throw errRes;
     if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada.' });
     if (reserva.estado_reserva !== 'Pendiente') {
         return res.status(400).json({ error: 'Esta reserva ya fue procesada.' });
     }
 
-    const { data: instrumento } = await supabase
+    const { data: instrumento, error: errInst } = await supabase
         .from('instrumentos')
         .select('*')
         .eq('id', reserva.instrumento_id)
         .maybeSingle();
+    if (errInst) throw errInst;
     if (!instrumento) return res.status(400).json({ error: 'El instrumento ya no existe.' });
     if (instrumento.estado_fisico === 'En reparación') {
         return res.status(400).json({ error: 'El instrumento está en reparación.' });
@@ -561,20 +633,26 @@ app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, re
     );
     if (conflicto) return res.status(400).json({ error: conflicto });
 
-    const { error: errIns } = await supabase.from('prestamos').insert([{
+    const nuevoPrestamo = {
         instrumento_id: reserva.instrumento_id,
         solicitante: reserva.solicitante,
-        ci_solicitante: reserva.ci,
-        telefono: reserva.telefono,
-        clase_evento: reserva.clase_evento,
+        ci_solicitante: reserva.ci_solicitante ?? reserva.ci ?? '',
+        telefono: reserva.telefono ?? '',
+        clase_evento: reserva.clase_evento ?? '',
         fecha_prestamo: reserva.fecha_prestamo,
         fecha_devolucion_limite: reserva.fecha_devolucion_limite,
-        firma_digital: `Reserva virtual - adelanto ${CONFIG.moneda} ${reserva.monto_adelanto}`,
+        firma_digital: `Reserva virtual - adelanto ${CONFIG.moneda} ${reserva.monto_adelanto ?? 0}`,
         estado: 'Activo',
         multa: 0,
         es_virtual: 1,
         estado_salida: instrumento.estado_fisico
-    }]);
+    };
+
+    const { data: prestamoCreado, error: errIns } = await supabase
+        .from('prestamos')
+        .insert([nuevoPrestamo])
+        .select()
+        .single();
     if (errIns) throw errIns;
 
     const { error: errUpd } = await supabase
@@ -583,8 +661,20 @@ app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, re
         .eq('id', reserva.id);
     if (errUpd) throw errUpd;
 
-    await registrarMovimiento('RESERVA', `Reserva #${reserva.id} aceptada`, req.usuario.nombre);
-    res.json({ mensaje: 'Reserva aceptada y registrada como préstamo virtual' });
+    try {
+        await registrarMovimiento(
+            'RESERVA',
+            `Reserva #${reserva.id} aceptada y convertida en préstamo #${prestamoCreado.id}`,
+            req.usuario.nombre
+        );
+    } catch (errMov) {
+        console.error('Error al registrar movimiento al aceptar reserva:', errMov);
+    }
+
+    res.json({
+        mensaje: 'Reserva aceptada y registrada como préstamo virtual',
+        prestamo: prestamoCreado
+    });
 }));
 
 app.post('/api/reservas/:id/rechazar', autenticar, soloAdmin, ruta(async (req, res) => {
@@ -606,6 +696,77 @@ app.post('/api/reservas/:id/rechazar', autenticar, soloAdmin, ruta(async (req, r
 
     await registrarMovimiento('RESERVA', `Reserva #${req.params.id} rechazada`, req.usuario.nombre);
     res.json({ mensaje: 'Reserva rechazada' });
+}));
+
+app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID de préstamo no válido.' });
+    }
+
+    const { data: prestamo, error: errBus } = await supabase
+        .from('prestamos')
+        .select('id, estado, solicitante, instrumento_id')
+        .eq('id', id)
+        .maybeSingle();
+    if (errBus) throw errBus;
+    if (!prestamo) return res.status(404).json({ error: 'Préstamo no encontrado.' });
+
+    if (prestamo.estado !== 'Activo') {
+        return res.status(400).json({
+            error: 'Solo se pueden anular o eliminar préstamos que estén Activos (los devueltos se conservan en el historial).'
+        });
+    }
+
+    const { error: errDel } = await supabase
+        .from('prestamos')
+        .delete()
+        .eq('id', id);
+    if (errDel) throw errDel;
+
+    await registrarMovimiento(
+        'PRÉSTAMO',
+        `Se anuló/eliminó el préstamo activo #${id} de ${prestamo.solicitante}`,
+        req.usuario.nombre
+    );
+    res.json({ mensaje: 'Préstamo anulado y eliminado con éxito' });
+}));
+
+app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID de reserva no válido.' });
+    }
+
+    const { data: reserva, error: errBus } = await supabase
+        .from('reservas_virtuales')
+        .select('id, solicitante, estado_reserva')
+        .eq('id', id)
+        .maybeSingle();
+    if (errBus) throw errBus;
+    if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada.' });
+
+    const { error: errDel } = await supabase
+        .from('reservas_virtuales')
+        .delete()
+        .eq('id', id);
+    if (errDel) {
+        return res.status(400).json({
+            error: `No se pudo eliminar la reserva (${errDel.message || 'revisa dependencias en base de datos'}).`
+        });
+    }
+
+    try {
+        await registrarMovimiento(
+            'RESERVA',
+            `Se eliminó la reserva #${id} (${reserva.estado_reserva}) de ${reserva.solicitante}`,
+            req.usuario.nombre
+        );
+    } catch (errMov) {
+        console.error('Error al registrar movimiento de reserva eliminada:', errMov);
+    }
+
+    res.json({ mensaje: 'Reserva eliminada con éxito' });
 }));
 
 // =====================================================================
@@ -631,6 +792,68 @@ app.get('/api/prestamos', autenticar, soloAdmin, ruta(async (req, res) => {
         instrumentos: undefined
     }));
     res.json(formateado);
+}));
+
+app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID de préstamo no válido.' });
+    }
+
+    const { data: prestamo, error: errBus } = await supabase
+        .from('prestamos')
+        .select('id, estado, solicitante, instrumento_id')
+        .eq('id', id)
+        .maybeSingle();
+    if (errBus) throw errBus;
+    if (!prestamo) return res.status(404).json({ error: 'Préstamo no encontrado.' });
+
+    if (prestamo.estado !== 'Activo') {
+        return res.status(400).json({
+            error: 'Solo se pueden anular o eliminar préstamos que estén Activos (los devueltos se conservan en el historial).'
+        });
+    }
+
+    const { error: errDel } = await supabase
+        .from('prestamos')
+        .delete()
+        .eq('id', id);
+    if (errDel) throw errDel;
+
+    await registrarMovimiento(
+        'PRÉSTAMO',
+        `Se anuló/eliminó el préstamo activo #${id} de ${prestamo.solicitante}`,
+        req.usuario.nombre
+    );
+    res.json({ mensaje: 'Préstamo anulado y eliminado con éxito' });
+}));
+
+app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID de reserva no válido.' });
+    }
+
+    const { data: reserva, error: errBus } = await supabase
+        .from('reservas_virtuales')
+        .select('id, solicitante, estado_reserva')
+        .eq('id', id)
+        .maybeSingle();
+    if (errBus) throw errBus;
+    if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada.' });
+
+    const { error: errDel } = await supabase
+        .from('reservas_virtuales')
+        .delete()
+        .eq('id', id);
+    if (errDel) throw errDel;
+
+    await registrarMovimiento(
+        'RESERVA',
+        `Se eliminó la reserva #${id} (${reserva.estado_reserva}) de ${reserva.solicitante}`,
+        req.usuario.nombre
+    );
+    res.json({ mensaje: 'Reserva eliminada con éxito' });
 }));
 
 app.get('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {

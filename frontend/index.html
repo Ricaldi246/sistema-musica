@@ -519,7 +519,7 @@
                     <div class="tabla-scroll">
                         <table class="tabla-cards">
                             <thead>
-                                <tr><th>🗑️</th><th>ID</th><th>Foto</th><th>Instrumento</th><th>Tipo</th><th>N° de Serie</th><th>Estado Físico</th><th>Disponibilidad</th></tr>
+                                <tr><th>Acciones</th><th>ID</th><th>Foto</th><th>Instrumento</th><th>Tipo</th><th>N° de Serie</th><th>Estado Físico</th><th>Disponibilidad</th></tr>
                             </thead>
                             <tbody id="tabla-instrumentos"></tbody>
                         </table>
@@ -635,7 +635,7 @@
                     </select>
                     <div id="pago-tarjeta" class="pago-detalle">
                         <label for="tarj-nombre">Nombre del titular:</label>
-                        <input type="text" id="tarj-nombre" placeholder="Como aparece en la tarjeta" autocomplete="cc-name">
+                        <input type="text" id="tarj-titular" placeholder="Como aparece en la tarjeta" autocomplete="cc-name">
                         <label for="tarj-numero">Número de tarjeta: <span id="tarj-marca" class="tarj-marca"></span></label>
                         <input type="text" id="tarj-numero" inputmode="numeric" placeholder="0000 0000 0000 0000" maxlength="19" autocomplete="cc-number">
                         <div class="tarj-fila">
@@ -783,6 +783,40 @@
 
             <button type="button" class="btn btn-success btn-block" onclick="guardarAvatarPerfil()">Guardar avatar</button>
             <button type="button" class="btn btn-gray btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-perfil-usuario')">Cerrar</button>
+        </div>
+    </div>
+
+    <div id="modal-editar-instrumento" class="modal-overlay">
+        <div class="modal-box">
+            <h3>✏️ Editar Instrumento</h3>
+            <form id="form-editar-instrumento" onsubmit="guardarEdicionInstrumento(event)">
+                <input type="hidden" id="edit-inst-id">
+                <label for="edit-inst-nombre">Nombre:</label>
+                <input type="text" id="edit-inst-nombre" required>
+                <label for="edit-inst-tipo">Tipo:</label>
+                <input type="text" id="edit-inst-tipo" required>
+                <label for="edit-inst-serie">Número de serie:</label>
+                <input type="text" id="edit-inst-serie" required>
+                <label for="edit-inst-estado">Estado físico:</label>
+                <select id="edit-inst-estado" required>
+                    <option value="Óptimo">Óptimo</option>
+                    <option value="Desgaste regular">Desgaste regular</option>
+                    <option value="En reparación">En reparación</option>
+                </select>
+                <label for="edit-inst-foto">Cambiar foto (opcional):</label>
+                <input type="file" id="edit-inst-foto" accept="image/*">
+                <img id="edit-inst-previa" class="foto-previa" alt="Vista previa" style="display: none;">
+                <button type="submit" class="btn btn-success btn-block">Guardar cambios</button>
+            </form>
+            <button class="btn btn-gray btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-editar-instrumento')">Cancelar</button>
+        </div>
+    </div>
+
+    <div id="modal-detalle-instrumento" class="modal-overlay">
+        <div class="modal-box">
+            <h3>🔍 Detalle del Instrumento</h3>
+            <div id="detalle-instrumento-ficha" class="detalle-modal"></div>
+            <button type="button" class="btn btn-gray btn-block" onclick="cerrarModal('modal-detalle-instrumento')">Cerrar</button>
         </div>
     </div>
 

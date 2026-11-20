@@ -639,9 +639,62 @@ function cambiarPanel(indicePanel) {
 
     if (intervaloCronometro) { clearInterval(intervaloCronometro); intervaloCronometro = null; }
 
-    if (indicePanel === 1) cargarInstrumentos();
-    else if (indicePanel === 2) cargarSelectInstrumentosParaPrestamo();
-    else if (indicePanel === 3) cargarPrestamosYDevoluciones();
+    if (indicePanel === 1 && typeof cargarInstrumentos === 'function') cargarInstrumentos();
+    else if (indicePanel === 2 && typeof cargarSelectInstrumentosParaPrestamo === 'function') cargarSelectInstrumentosParaPrestamo();
+    else if (indicePanel === 3 && typeof cargarPrestamosYDevoluciones === 'function') {
+        cargarPrestamosYDevoluciones();
+    }
+}
+
+async function cargarPrestamosYDevoluciones() {
+    const tbody = $('tabla-devoluciones');
+    if (!tbody) return;
+    if (intervaloCronometro) { clearInterval(intervaloCronometro); intervaloCronometro = null; }
+
+    try {
+        prestamosCache = await api('/api/prestamos');
+    } catch (err) {
+        toast(err.message, 'error');
+        return;
+    }
+
+    tbody.innerHTML = '';
+    if (prestamosCache.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#777;">Aún no hay préstamos registrados.</td></tr>`;
+        return;
+    }
+
+    prestamosCache.forEach((p) => {
+        const activo = p.estado === 'Activo';
+        const celdaCronometro = activo
+            ? `<td class="cronometro" data-label="Cronómetro" data-salida="${esc(p.fecha_prestamo)}" data-limite="${esc(p.fecha_devolucion_limite)}">…</td>`
+            : `<td data-label="Cronómetro">Devuelto el<br>${verFecha(p.fecha_devolucion_real)}</td>`;
+
+        const detalleMulta = (!activo && (p.multa_retraso || p.multa_dano))
+            ? `<br><small>Retraso: ${moneda(p.multa_retraso)}<br>Daño (${esc(p.nivel_dano)}): ${moneda(p.multa_dano)}</small>`
+            : '';
+
+        const acciones = `
+            ${activo ? `<button type="button" class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : '<span>Completado</span>'}
+            ${activo ? `<button type="button" class="btn btn-danger btn-sm" onclick="eliminarPrestamo(${Number(p.id)}, this)" title="Anular préstamo activo">🗑️</button>` : ''}
+            <button type="button" class="btn btn-dark btn-sm" onclick="verActa(${Number(p.id)})">Acta</button>
+        `;
+
+        const fila = document.createElement('tr');
+        fila.innerHTML = `
+            <td data-label="ID">${Number(p.id)}</td>
+            <td data-label="Instrumento">${esc(p.nombre || p.instrumento_nombre || '(instrumento eliminado)')}${p.es_virtual ? '<br><small>🌐 Reserva virtual</small>' : ''}</td>
+            <td data-label="Solicitante">${esc(p.solicitante)}</td>
+            <td data-label="Salida / Límite">Salida: ${verFecha(p.fecha_prestamo)}<br>Límite: ${verFecha(p.fecha_devolucion_limite)}</td>
+            ${celdaCronometro}
+            <td data-label="Multa"><strong>${moneda(p.multa)}</strong>${detalleMulta}</td>
+            <td data-label="Acción">${acciones}</td>
+        `;
+        tbody.appendChild(fila);
+    });
+
+    actualizarCronometros();
+    intervaloCronometro = setInterval(actualizarCronometros, 1000);
 }
 
 // =====================================================================
@@ -751,12 +804,17 @@ async function abrirBandejaAdmin() {
 
         reservas.forEach((r) => {
             const color = r.estado_reserva === 'Pendiente' ? '#f39c12' : (r.estado_reserva === 'Aceptada' ? '#27ae60' : '#e74c3c');
-            const acciones = r.estado_reserva === 'Pendiente' ? `
-                <div class="item-acciones">
-                    <button class="btn btn-success" onclick="aceptarReserva(${Number(r.id)})">Aceptar</button>
-                    <button class="btn btn-danger" onclick="rechazarReserva(${Number(r.id)}, this)">Rechazar</button>
-                </div>
-            ` : `<p class="estado-texto" style="color: ${color};">Estado: ${esc(r.estado_reserva)}</p>`;
+            const btnEliminar = `<button type="button" class="btn btn-gray btn-sm" onclick="eliminarReservaAdmin(${Number(r.id)}, this)">Eliminar</button>`;
+        const acciones = r.estado_reserva === 'Pendiente' ? `
+            <div class="item-acciones">
+                <button type="button" class="btn btn-success" onclick="aceptarReserva(${Number(r.id)})">Aceptar</button>
+                <button type="button" class="btn btn-danger" onclick="rechazarReserva(${Number(r.id)}, this)">Rechazar</button>
+                ${btnEliminar}
+            </div>
+        ` : `
+            <p class="estado-texto" style="color: ${color};">Estado: ${esc(r.estado_reserva)}</p>
+            <div class="item-acciones">${btnEliminar}</div>
+        `;
 
             const div = document.createElement('div');
             div.className = 'item-caja';
@@ -776,13 +834,30 @@ async function abrirBandejaAdmin() {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+async function eliminarReservaAdmin(id, boton) {
+    if (!confirmarClic(boton)) return;
+    try {
+        await api(`/api/reservas/${Number(id)}`, { method: 'DELETE' });
+        toast('Reserva eliminada.');
+        actualizarContadorBandejaAdmin();
+        abrirBandejaAdmin();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
 async function aceptarReserva(id) {
     try {
         await api(`/api/reservas/${id}/aceptar`, { method: 'POST' });
         toast('Reserva aceptada y registrada como préstamo.');
-        actualizarContadorBandejaAdmin();
-        abrirBandejaAdmin();
-    } catch (err) { toast(err.message, 'error'); }
+        await actualizarContadorBandejaAdmin();
+        await abrirBandejaAdmin();
+
+        if (typeof cargarPrestamosYDevoluciones === 'function') await cargarPrestamosYDevoluciones();
+        if (typeof cargarInstrumentos === 'function') await cargarInstrumentos();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
 
 async function rechazarReserva(id, boton) {
@@ -965,31 +1040,34 @@ if (campoCvv) {
 }
 
 function limpiarDatosTarjeta() {
-    ['tarj-nombre', 'tarj-numero', 'tarj-vence', 'tarj-cvv'].forEach((id) => { $(id).value = ''; });
-    $('tarj-marca').textContent = '';
-    $('tarj-cvv').maxLength = 3;
+    ['tarj-nombre', 'tarj-numero', 'tarj-venc', 'tarj-cvv'].forEach((id) => {
+        const el = $(id);
+        if (el) el.value = '';
+    });
+    const marca = $('tarj-marca');
+    if (marca) marca.textContent = '';
+    const cvv = $('tarj-cvv');
+    if (cvv) cvv.maxLength = 3;
 }
 
 // Devuelve el texto del error, o null si la tarjeta es válida
 function validarTarjeta() {
-    const nombre = $('tarj-nombre').value.trim();
-    const numero = $('tarj-numero').value.replace(/\D/g, '');
-    const vence = $('tarj-vence').value;
-    const cvv = $('tarj-cvv').value;
-    const amex = /^3[47]/.test(numero);
+    const titular = (($('tarj-nombre') || $('tarj-titular'))?.value || '').trim();
+    const numLimpio = ($('tarj-numero')?.value || '').replace(/\D/g, '');
+    const venc = ($('tarj-venc')?.value || '').trim();
+    const cvv = ($('tarj-cvv')?.value || '').replace(/\D/g, '');
 
-    if (nombre.length < 3) return 'Escribe el nombre del titular de la tarjeta.';
-    if (numero.length !== (amex ? 15 : 16) || !luhnValido(numero)) return 'El número de tarjeta no es válido.';
-
-    const m = /^(\d{2})\/(\d{2})$/.exec(vence);
-    if (!m) return 'Escribe el vencimiento con el formato MM/AA.';
-    const mes = Number(m[1]);
-    const anio = 2000 + Number(m[2]);
-    if (mes < 1 || mes > 12) return 'El mes de vencimiento no es válido.';
-    if (new Date(anio, mes, 1) <= new Date()) return 'La tarjeta está vencida.';
-
-    if (cvv.length !== (amex ? 4 : 3)) return `El CVV debe tener ${amex ? 4 : 3} dígitos.`;
-    return null;
+    if (!titular) return 'Ingresa el nombre del titular de la tarjeta.';
+    if (numLimpio.length < 13 || numLimpio.length > 19) {
+        return 'El número de tarjeta debe tener entre 13 y 19 dígitos.';
+    }
+    if (venc && !/^\d{2}\/\d{2}$/.test(venc)) {
+        return 'Usa el formato MM/AA en la fecha de vencimiento.';
+    }
+    if (cvv && (cvv.length < 3 || cvv.length > 4)) {
+        return 'El CVV debe tener 3 o 4 dígitos.';
+    }
+    return '';
 }
 
 function cambiarMetodoPago() {
@@ -1151,7 +1229,7 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
     tbody.innerHTML = '';
 
     if (instrumentos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#777;">Aún no hay instrumentos registrados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#777;">Aún no hay instrumentos registrados.</td></tr>`;
         return;
     }
 
@@ -1165,7 +1243,11 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
 
         const fila = document.createElement('tr');
         fila.innerHTML = `
-            <td data-label="Eliminar"><button class="btn btn-danger btn-sm" onclick="eliminarInstrumento(${Number(item.id)}, this)">🗑️</button></td>
+            <td data-label="Acciones">
+    <button type="button" class="btn btn-dark btn-sm" onclick="verDetalleInstrumento(${Number(item.id)})" title="Ver por ID">🔍</button>
+    <button type="button" class="btn btn-info btn-sm" onclick="abrirEditarInstrumento(${Number(item.id)})" title="Editar">✏️</button>
+    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarInstrumento(${Number(item.id)}, this)" title="Eliminar">🗑️</button>
+</td>
             <td data-label="ID">${Number(item.id)}</td>
             <td data-label="Foto">${foto}</td>
             <td data-label="Instrumento">${esc(item.nombre)}</td>
@@ -1176,6 +1258,33 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
         `;
         tbody.appendChild(fila);
     });
+}
+
+async function verDetalleInstrumento(id) {
+    try {
+        const [item, disp] = await Promise.all([
+            api(`/api/instrumentos/${Number(id)}`),
+            api('/api/disponibilidad')
+        ]);
+        const ocupados = new Set(disp.ocupados || []);
+        const estadoDisp = item.estado_fisico === 'En reparación'
+            ? 'En reparación'
+            : (ocupados.has(item.id) ? 'En uso' : 'Disponible');
+        const urlFoto = item.imagen || item.foto || '';
+
+        $('detalle-instrumento-ficha').innerHTML = `
+            ${urlFoto ? `<img src="${esc(urlFoto)}" alt="${esc(item.nombre)}" class="foto-previa" style="display:block; margin-bottom:10px;">` : ''}
+            <p><strong>ID:</strong> ${Number(item.id)}</p>
+            <p><strong>Nombre:</strong> ${esc(item.nombre)}</p>
+            <p><strong>Tipo:</strong> ${esc(item.tipo)}</p>
+            <p><strong>N° de serie:</strong> ${esc(item.numero_serie)}</p>
+            <p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
+            <p><strong>Disponibilidad:</strong> ${esc(estadoDisp)}</p>
+        `;
+        abrirModal('modal-detalle-instrumento');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
 
 async function cambiarEstadoInstrumento(id, estado) {
@@ -1195,6 +1304,107 @@ async function eliminarInstrumento(id, boton) {
         toast(err.message, 'error');
     }
     cargarInstrumentos();
+}
+
+let editInstImagenTemp = undefined;
+
+const inputEditFoto = $('edit-inst-foto');
+if (inputEditFoto) {
+    inputEditFoto.addEventListener('change', async () => {
+        const previa = $('edit-inst-previa');
+        if (!inputEditFoto.files[0]) {
+            editInstImagenTemp = undefined;
+            if (previa) previa.style.display = 'none';
+            return;
+        }
+        try {
+            const dataUrl = await leerImagenRedimensionada(inputEditFoto.files[0]);
+            editInstImagenTemp = dataUrl;
+            if (previa) {
+                previa.src = dataUrl;
+                previa.style.display = 'block';
+            }
+        } catch (err) {
+            toast(err.message, 'error');
+            inputEditFoto.value = '';
+            editInstImagenTemp = undefined;
+        }
+    });
+}
+
+function abrirEditarInstrumento(id) {
+    const item = listaInstrumentosCache.find((i) => Number(i.id) === Number(id));
+    if (!item) return;
+
+    editInstImagenTemp = undefined;
+    $('edit-inst-id').value = item.id;
+    $('edit-inst-nombre').value = item.nombre || '';
+    $('edit-inst-tipo').value = item.tipo || '';
+    $('edit-inst-serie').value = item.numero_serie || '';
+    $('edit-inst-estado').value = ESTADOS_FISICOS.includes(item.estado_fisico) ? item.estado_fisico : 'Óptimo';
+    if ($('edit-inst-foto')) $('edit-inst-foto').value = '';
+
+    const previa = $('edit-inst-previa');
+    if (previa) {
+        const fotoActual = item.imagen || item.foto || '';
+        if (fotoActual) {
+            previa.src = fotoActual;
+            previa.style.display = 'block';
+        } else {
+            previa.style.display = 'none';
+        }
+    }
+    abrirModal('modal-editar-instrumento');
+}
+
+async function guardarEdicionInstrumento(e) {
+    e.preventDefault();
+    const id = Number($('edit-inst-id').value);
+    const cuerpo = {
+        nombre: $('edit-inst-nombre').value,
+        tipo: $('edit-inst-tipo').value,
+        numero_serie: $('edit-inst-serie').value,
+        estado_fisico: $('edit-inst-estado').value
+    };
+    if (editInstImagenTemp !== undefined) {
+        cuerpo.imagen = editInstImagenTemp;
+    }
+
+    try {
+        await api(`/api/instrumentos/${id}`, { method: 'PUT', body: cuerpo });
+        cerrarModal('modal-editar-instrumento');
+        toast('Instrumento actualizado.');
+        cargarInstrumentos();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function verDetalleInstrumento(id) {
+    try {
+        const [item, disp] = await Promise.all([
+            api(`/api/instrumentos/${Number(id)}`),
+            api('/api/disponibilidad')
+        ]);
+        const ocupados = new Set(disp.ocupados || []);
+        const estadoDisp = item.estado_fisico === 'En reparación'
+            ? 'En reparación'
+            : (ocupados.has(item.id) ? 'En uso' : 'Disponible');
+        const urlFoto = item.imagen || item.foto || '';
+
+        $('detalle-instrumento-ficha').innerHTML = `
+            ${urlFoto ? `<img src="${esc(urlFoto)}" alt="${esc(item.nombre)}" class="foto-previa" style="display:block; margin-bottom:10px;">` : ''}
+            <p><strong>ID:</strong> ${Number(item.id)}</p>
+            <p><strong>Nombre:</strong> ${esc(item.nombre)}</p>
+            <p><strong>Tipo:</strong> ${esc(item.tipo)}</p>
+            <p><strong>N° de serie:</strong> ${esc(item.numero_serie)}</p>
+            <p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
+            <p><strong>Disponibilidad:</strong> ${esc(estadoDisp)}</p>
+        `;
+        abrirModal('modal-detalle-instrumento');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
 
 // =====================================================================
@@ -1350,7 +1560,7 @@ function actualizarCronometros() {
     });
 }
 
-async function cargarPrestamosYDevoluciones() {
+async function cargosYDevoluciones() {
     const tbody = $('tabla-devoluciones');
     if (!tbody) return;
     try {
@@ -1374,9 +1584,10 @@ async function cargarPrestamosYDevoluciones() {
             : '';
 
         const acciones = `
-            ${activo ? `<button class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : '<span>Completado</span>'}
-            <button class="btn btn-dark btn-sm" onclick="verActa(${Number(p.id)})">Acta</button>
-        `;
+    ${activo ? `<button type="button" class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : '<span>Completado</span>'}
+    ${activo ? `<button type="button" class="btn btn-danger btn-sm" onclick="eliminarPrestamo(${Number(p.id)}, this)" title="Anular préstamo activo">🗑️</button>` : ''}
+    <button type="button" class="btn btn-dark btn-sm" onclick="verActa(${Number(p.id)})">Acta</button>
+`;
 
         const fila = document.createElement('tr');
         fila.innerHTML = `
@@ -1393,6 +1604,17 @@ async function cargarPrestamosYDevoluciones() {
 
     actualizarCronometros();
     intervaloCronometro = setInterval(actualizarCronometros, 1000);
+}
+
+async function eliminarPrestamo(id, boton) {
+    if (!confirmarClic(boton)) return;
+    try {
+        await api(`/api/prestamos/${Number(id)}`, { method: 'DELETE' });
+        toast('Préstamo anulado.');
+        cargarPrestamosYDevoluciones();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
 
 async function abrirDevolucion(id) {
