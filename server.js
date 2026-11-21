@@ -602,6 +602,89 @@ app.get('/api/mis-reservas', autenticar, ruta(async (req, res) => {
     res.json(formateado);
 }));
 
+app.post('/api/mis-reservas/:id/cancelar', autenticar, ruta(async (req, res) => {
+  const reservaId = Number(req.params.id);
+  if (!Number.isInteger(reservaId) || reservaId <= 0) {
+    return res.status(400).json({ error: 'ID de reserva no válido.' });
+  }
+
+  const usuarioId = req.usuario?.id ?? req.usuario?.usuario_id;
+
+  const { data: reserva, error: errBuscar } = await supabase
+    .from('reservas_virtuales')
+    .select('*')
+    .eq('id', reservaId)
+    .maybeSingle();
+
+  if (errBuscar) throw errBuscar;
+
+  if (reserva) {
+    if (usuarioId && reserva.usuario_id && Number(reserva.usuario_id) !== Number(usuarioId)) {
+      return res.status(403).json({ error: 'No tienes permiso para cancelar esta reserva.' });
+    }
+
+    const { data: actualizada, error: errUpdate } = await supabase
+      .from('reservas_virtuales')
+      .update({ estado_reserva: 'Cancelada' })
+      .eq('id', reservaId)
+      .select()
+      .single();
+
+    if (errUpdate) throw errUpdate;
+
+    if (reserva.instrumento_id) {
+      await supabase
+        .from('prestamos')
+        .update({ estado: 'Cancelado' })
+        .eq('instrumento_id', reserva.instrumento_id)
+        .eq('es_virtual', 1)
+        .ilike('estado', 'activo');
+
+      await supabase
+        .from('instrumentos')
+        .update({ disponible: true })
+        .eq('id', reserva.instrumento_id)
+        .neq('estado_fisico', 'En reparación');
+    }
+
+    return res.json({
+      ok: true,
+      reserva: actualizada,
+      estado_label_admin: 'Solicitud / Reserva cancelada'
+    });
+  }
+
+  // Respaldo: si ya fue aceptada y movida/cerrada en prestamos
+  const { data: prestamo, error: errPrest } = await supabase
+    .from('prestamos')
+    .select('*')
+    .eq('id', reservaId)
+    .maybeSingle();
+
+  if (errPrest) throw errPrest;
+  if (!prestamo) {
+    return res.status(404).json({ error: 'Reserva no encontrada.' });
+  }
+
+  await supabase
+    .from('prestamos')
+    .update({ estado: 'Cancelado' })
+    .eq('id', reservaId);
+
+  if (prestamo.instrumento_id) {
+    await supabase
+      .from('instrumentos')
+      .update({ disponible: true })
+      .eq('id', prestamo.instrumento_id)
+      .neq('estado_fisico', 'En reparación');
+  }
+
+  return res.json({
+    ok: true,
+    estado_label_admin: 'Solicitud / Reserva cancelada'
+  });
+}));
+
 app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data: reserva, error: errRes } = await supabase
         .from('reservas_virtuales')
@@ -699,37 +782,39 @@ app.post('/api/reservas/:id/rechazar', autenticar, soloAdmin, ruta(async (req, r
 }));
 
 app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({ error: 'ID de préstamo no válido.' });
-    }
+  const prestamoId = Number(req.params.id);
+  if (!Number.isInteger(prestamoId) || prestamoId <= 0) {
+    return res.status(400).json({ error: 'ID de préstamo no válido.' });
+  }
 
-    const { data: prestamo, error: errBus } = await supabase
-        .from('prestamos')
-        .select('id, estado, solicitante, instrumento_id')
-        .eq('id', id)
-        .maybeSingle();
-    if (errBus) throw errBus;
-    if (!prestamo) return res.status(404).json({ error: 'Préstamo no encontrado.' });
+  const { data: prestamo, error: errBuscar } = await supabase
+    .from('prestamos')
+    .select('id, estado, instrumento_id')
+    .eq('id', prestamoId)
+    .maybeSingle();
 
-    if (prestamo.estado !== 'Activo') {
-        return res.status(400).json({
-            error: 'Solo se pueden anular o eliminar préstamos que estén Activos (los devueltos se conservan en el historial).'
-        });
-    }
+  if (errBuscar) throw errBuscar;
+  if (!prestamo) {
+    return res.status(404).json({ error: 'Registro de préstamo no encontrado.' });
+  }
 
-    const { error: errDel } = await supabase
-        .from('prestamos')
-        .delete()
-        .eq('id', id);
-    if (errDel) throw errDel;
+  // Si estaba activo y se elimina, liberar el instrumento si no está en reparación
+  if (String(prestamo.estado || '').toLowerCase() === 'activo' && prestamo.instrumento_id) {
+    await supabase
+      .from('instrumentos')
+      .update({ disponible: true })
+      .eq('id', prestamo.instrumento_id)
+      .neq('estado_fisico', 'En reparación');
+  }
 
-    await registrarMovimiento(
-        'PRÉSTAMO',
-        `Se anuló/eliminó el préstamo activo #${id} de ${prestamo.solicitante}`,
-        req.usuario.nombre
-    );
-    res.json({ mensaje: 'Préstamo anulado y eliminado con éxito' });
+  const { error: errDelete } = await supabase
+    .from('prestamos')
+    .delete()
+    .eq('id', prestamoId);
+
+  if (errDelete) throw errDelete;
+
+  return res.json({ ok: true, id: prestamoId });
 }));
 
 app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => {
@@ -989,6 +1074,46 @@ app.put('/api/prestamos/:id/devolver', autenticar, soloAdmin, ruta(async (req, r
         req.usuario.nombre
     );
     res.json({ mensaje: 'Devolución registrada', multa: m.total, detalle: m });
+}));
+
+app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
+  const prestamoId = Number(req.params.id);
+  if (!Number.isInteger(prestamoId) || prestamoId <= 0) {
+    return res.status(400).json({ error: 'ID de préstamo no válido.' });
+  }
+
+  const { data: prestamo, error: errBuscar } = await supabase
+    .from('prestamos')
+    .select('id, estado, fecha_devolucion_real')
+    .eq('id', prestamoId)
+    .maybeSingle();
+
+  if (errBuscar) throw errBuscar;
+  if (!prestamo) {
+    return res.status(404).json({ error: 'Registro de préstamo no encontrado.' });
+  }
+
+  const estadoLower = String(prestamo.estado || '').toLowerCase();
+  const yaFinalizado =
+    Boolean(prestamo.fecha_devolucion_real) ||
+    estadoLower.includes('devuelto') ||
+    estadoLower.includes('complet') ||
+    estadoLower.includes('cancel');
+
+  if (!yaFinalizado) {
+    return res.status(400).json({
+      error: 'Solo se pueden borrar registros ya devueltos/completados o cancelados.'
+    });
+  }
+
+  const { error: errDelete } = await supabase
+    .from('prestamos')
+    .delete()
+    .eq('id', prestamoId);
+
+  if (errDelete) throw errDelete;
+
+  return res.json({ ok: true, id: prestamoId });
 }));
 
 // =====================================================================

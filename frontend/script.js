@@ -173,18 +173,55 @@ async function cargarConfig() {
 const audioLampara = new Audio('navidad.mp3');
 audioLampara.volume = 0.6;
 
+function actualizarIconosSonidoLogin() {
+  if (!soundToggle) return;
+  const onIcon = soundToggle.querySelector(".sound-on");
+  const offIcon = soundToggle.querySelector(".sound-off");
+  if (onIcon) onIcon.style.display = isSoundEnabled ? "" : "none";
+  if (offIcon) offIcon.style.display = isSoundEnabled ? "none" : "";
+  soundToggle.setAttribute("aria-pressed", String(!isSoundEnabled));
+  soundToggle.setAttribute("title", isSoundEnabled ? "Silenciar música" : "Activar música");
+}
+
+function detenerAudioLampara() {
+  try {
+    if (typeof audioLampara !== "undefined" && audioLampara) {
+      audioLampara.pause();
+      audioLampara.currentTime = 0;
+    }
+  } catch (e) {}
+}
+
 function playElasticPluckSound(pullDist, turningOn) {
-  if (!isSoundEnabled) return;
+  if (!isSoundEnabled || turningOn === false) {
+    detenerAudioLampara();
+    return;
+  }
   try {
     if (pullDist >= TRIGGER_PULL) {
       audioLampara.currentTime = 0;
-      audioLampara.play().catch(e => {
+      audioLampara.play().catch((e) => {
         console.warn("El navegador bloqueó la reproducción automática:", e);
       });
     }
   } catch (e) {
     console.warn("Audio error:", e);
   }
+}
+
+if (soundToggle) {
+  actualizarIconosSonidoLogin();
+  soundToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    isSoundEnabled = !isSoundEnabled;
+    if (!isSoundEnabled) {
+      detenerAudioLampara();
+    } else if (isOn) {
+      audioLampara.currentTime = 0;
+      audioLampara.play().catch(() => {});
+    }
+    actualizarIconosSonidoLogin();
+  });
 }
 
   function playColorSwitchSound() {
@@ -646,6 +683,22 @@ function cambiarPanel(indicePanel) {
     }
 }
 
+async function borrarRegistroPrestamoAdmin(id, boton) {
+    if (!confirmarClic(boton)) return;
+    const numId = Number(id);
+    if (!Number.isInteger(numId) || numId <= 0) {
+        toast('ID de registro no válido.', 'error');
+        return;
+    }
+    try {
+        await api(`/api/prestamos/${numId}`, { method: 'DELETE' });
+        toast('Registro eliminado de devoluciones.');
+        await cargarPrestamosYDevoluciones();
+    } catch (err) {
+        toast(err.message || 'No se pudo eliminar el registro.', 'error');
+    }
+}
+
 async function cargarPrestamosYDevoluciones() {
     const tbody = $('tabla-devoluciones');
     if (!tbody) return;
@@ -674,11 +727,13 @@ async function cargarPrestamosYDevoluciones() {
             ? `<br><small>Retraso: ${moneda(p.multa_retraso)}<br>Daño (${esc(p.nivel_dano)}): ${moneda(p.multa_dano)}</small>`
             : '';
 
-        const acciones = `
-            ${activo ? `<button type="button" class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : '<span>Completado</span>'}
-            ${activo ? `<button type="button" class="btn btn-danger btn-sm" onclick="eliminarPrestamo(${Number(p.id)}, this)" title="Anular préstamo activo">🗑️</button>` : ''}
-            <button type="button" class="btn btn-dark btn-sm" onclick="verActa(${Number(p.id)})">Acta</button>
-        `;
+        const yaFinalizado = !activo || /cancel/i.test(String(p.estado || ''));
+const acciones = `
+    ${activo ? `<button type="button" class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : '<span>Completado</span>'}
+    ${activo ? `<button type="button" class="btn btn-danger btn-sm" onclick="eliminarPrestamo(${Number(p.id)}, this)" title="Anular préstamo activo">🗑️</button>` : ''}
+    <button type="button" class="btn btn-dark btn-sm" onclick="verActa(${Number(p.id)})">Acta</button>
+    ${yaFinalizado ? `<button type="button" class="btn btn-danger btn-sm" onclick="borrarRegistroPrestamoAdmin(${Number(p.id)}, this)" title="Borrar registro completado/cancelado">🗑️</button>` : ''}
+`;
 
         const fila = document.createElement('tr');
         fila.innerHTML = `
@@ -869,10 +924,197 @@ async function rechazarReserva(id, boton) {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+const OPCIONES_BORRADO_NOTIF = [
+    { valor: 'ninguno', etiqueta: 'No borrar nada', dias: null },
+    { valor: '1d', etiqueta: 'Cada 1 día', dias: 1 },
+    { valor: '4d', etiqueta: 'Cada 4 días', dias: 4 },
+    { valor: '7d', etiqueta: 'Cada semana', dias: 7 },
+    { valor: '14d', etiqueta: 'Cada 2 semanas', dias: 14 },
+    { valor: '30d', etiqueta: 'Cada mes', dias: 30 }
+];
+
+function claveEstadoNotifUsuario() {
+    const sesion = getSesion();
+    const u = sesion && sesion.usuario;
+    const id = (u && (u.id || u.email || u.nombre)) || 'anonimo';
+    return `notif_cliente_${String(id).toLowerCase()}`;
+}
+
+function leerEstadoNotifUsuario() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(claveEstadoNotifUsuario()) || '{}');
+        return {
+            frecuencia: OPCIONES_BORRADO_NOTIF.some((o) => o.valor === raw.frecuencia) ? raw.frecuencia : 'ninguno',
+            ocultas: raw.ocultas && typeof raw.ocultas === 'object' ? raw.ocultas : {}
+        };
+    } catch (e) {
+        return { frecuencia: 'ninguno', ocultas: {} };
+    }
+}
+
+function guardarEstadoNotifUsuario(estado) {
+    localStorage.setItem(claveEstadoNotifUsuario(), JSON.stringify(estado));
+}
+
+function aplicarBorradoAutomaticoNotif(notificaciones, estado) {
+    const cfg = OPCIONES_BORRADO_NOTIF.find((o) => o.valor === estado.frecuencia);
+    if (!cfg || !cfg.dias) return notificaciones;
+
+    const msLimite = cfg.dias * 24 * 60 * 60 * 1000;
+    const ahora = Date.now();
+    let huboCambios = false;
+
+    const filtradas = notificaciones.filter((n) => {
+        const refFecha = n.updated_at || n.fecha_actualizacion || n.fecha_devolucion_limite || n.fecha_prestamo || n.created_at;
+        const ts = refFecha ? new Date(refFecha).getTime() : NaN;
+        if (!isNaN(ts) && (ahora - ts) >= msLimite) {
+            estado.ocultas[String(n.id)] = ahora;
+            huboCambios = true;
+            return false;
+        }
+        return true;
+    });
+
+    if (huboCambios) guardarEstadoNotifUsuario(estado);
+    return filtradas;
+}
+
+function borrarNotificacionCliente(id, boton) {
+    if (!confirmarClic(boton)) return;
+    const estado = leerEstadoNotifUsuario();
+    estado.ocultas[String(id)] = Date.now();
+    guardarEstadoNotifUsuario(estado);
+    toast('Notificación eliminada.');
+    abrirBandejaCliente();
+}
+
+function borrarTodasNotificacionesCliente(notificaciones, boton) {
+    if (!confirmarClic(boton)) return;
+    const estado = leerEstadoNotifUsuario();
+    const ahora = Date.now();
+    notificaciones.forEach((n) => {
+        estado.ocultas[String(n.id)] = ahora;
+    });
+    guardarEstadoNotifUsuario(estado);
+    toast('Notificaciones eliminadas.');
+    abrirBandejaCliente();
+}
+
+function cambiarFrecuenciaBorradoNotif(nuevaFrecuencia) {
+    const estado = leerEstadoNotifUsuario();
+    estado.frecuencia = nuevaFrecuencia;
+    guardarEstadoNotifUsuario(estado);
+    const cfg = OPCIONES_BORRADO_NOTIF.find((o) => o.valor === nuevaFrecuencia);
+    toast(`Borrado automático: ${cfg ? cfg.etiqueta : 'No borrar nada'}.`);
+    abrirBandejaCliente();
+}
+
+async function cancelarReservaCliente(id, boton) {
+    if (!confirmarClic(boton)) return;
+    const numId = Number(id);
+    if (!Number.isInteger(numId) || numId <= 0) {
+        toast('ID de notificación no válido.', 'error');
+        return;
+    }
+    try {
+        await api(`/api/mis-reservas/${numId}/cancelar`, { method: 'POST' });
+        toast('Reserva cancelada. Se notificó al administrador.');
+        await abrirBandejaCliente();
+        if (typeof cargarBandejaReservasAdmin === 'function') {
+            cargarBandejaReservasAdmin().catch(() => {});
+        }
+    } catch (err) {
+        toast(err.message || 'No se pudo cancelar la reserva.', 'error');
+    }
+}
+
 async function abrirBandejaCliente() {
     try {
-        const notificaciones = await api('/api/mis-reservas');
+        const todas = await api('/api/mis-reservas');
         const contenedor = $('lista-notificaciones-cliente');
+        if (!contenedor) return;
+
+        const modal = $('modal-bandeja-cliente');
+        const encabezado = modal ? modal.querySelector('h2, h3, .modal-header') : null;
+        if (encabezado && !encabezado.dataset.notifToolbarLista) {
+            encabezado.dataset.notifToolbarLista = '1';
+            encabezado.style.display = 'flex';
+            encabezado.style.alignItems = 'center';
+            encabezado.style.justifyContent = 'space-between';
+            encabezado.style.gap = '10px';
+            encabezado.style.position = 'relative';
+
+            const wrap = document.createElement('div');
+            wrap.style.position = 'relative';
+            wrap.style.display = 'inline-flex';
+            wrap.style.alignItems = 'center';
+
+            const btnBasurero = document.createElement('button');
+            btnBasurero.type = 'button';
+            btnBasurero.id = 'btn-menu-borrado-notif';
+            btnBasurero.className = 'btn btn-dark btn-sm';
+            btnBasurero.title = 'Opciones de borrado de notificaciones';
+            btnBasurero.textContent = '🗑️';
+
+            const menu = document.createElement('div');
+            menu.id = 'menu-borrado-notif';
+            menu.style.display = 'none';
+            menu.style.position = 'absolute';
+            menu.style.right = '0';
+            menu.style.top = '110%';
+            menu.style.zIndex = '50';
+            menu.style.minWidth = '210px';
+            menu.style.background = '#fff';
+            menu.style.color = '#222';
+            menu.style.border = '1px solid #ddd';
+            menu.style.borderRadius = '8px';
+            menu.style.padding = '8px';
+            menu.style.boxShadow = '0 6px 18px rgba(0,0,0,0.18)';
+            menu.style.fontSize = '0.88rem';
+
+            btnBasurero.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+            });
+            menu.addEventListener('click', (ev) => ev.stopPropagation());
+            document.addEventListener('click', () => {
+                menu.style.display = 'none';
+            });
+
+            wrap.appendChild(btnBasurero);
+            wrap.appendChild(menu);
+            encabezado.appendChild(wrap);
+        }
+
+        const estado = leerEstadoNotifUsuario();
+        const sinOcultas = Array.isArray(todas)
+            ? todas.filter((n) => !estado.ocultas[String(n.id)])
+            : [];
+        const notificaciones = aplicarBorradoAutomaticoNotif(sinOcultas, estado);
+
+        const menu = $('menu-borrado-notif');
+        if (menu) {
+            const opcionesHtml = OPCIONES_BORRADO_NOTIF.map((op) => `
+                <label style="display:flex;align-items:center;gap:6px;padding:4px 6px;cursor:pointer;border-radius:4px;">
+                    <input type="radio" name="freq-borrado-notif" value="${esc(op.valor)}" ${estado.frecuencia === op.valor ? 'checked' : ''} onchange="cambiarFrecuenciaBorradoNotif(this.value)">
+                    <span>${esc(op.etiqueta)}</span>
+                </label>
+            `).join('');
+
+            menu.innerHTML = `
+                <div style="font-weight:600;margin-bottom:4px;padding:0 6px;">Borrado automático</div>
+                ${opcionesHtml}
+                <hr style="margin:6px 0;border:none;border-top:1px solid #eee;">
+                <button type="button" id="btn-borrar-todas-notif" class="btn btn-danger btn-sm" style="width:100%;">Borrar todas</button>
+            `;
+
+            const btnBorrarTodas = $('btn-borrar-todas-notif');
+            if (btnBorrarTodas) {
+                btnBorrarTodas.disabled = notificaciones.length === 0;
+                btnBorrarTodas.addEventListener('click', () => borrarTodasNotificacionesCliente(notificaciones, btnBorrarTodas));
+            }
+        }
+
         contenedor.innerHTML = '';
 
         if (notificaciones.length === 0) {
@@ -882,11 +1124,25 @@ async function abrirBandejaCliente() {
         }
 
         notificaciones.forEach((n) => {
-            const color = n.estado_reserva === 'Aceptada' ? '#27ae60' : (n.estado_reserva === 'Rechazada' ? '#e74c3c' : '#f39c12');
+            const idNotif = Number(n.id ?? n.reserva_id ?? 0);
+            const esCancelada = String(n.estado_reserva || '').toLowerCase() === 'cancelada';
+            const color = n.estado_reserva === 'Aceptada'
+                ? '#27ae60'
+                : (n.estado_reserva === 'Rechazada' || esCancelada ? '#e74c3c' : '#f39c12');
+            const textoEstado = esCancelada ? 'Solicitud / Reserva cancelada' : n.estado_reserva;
+            const puedeCancelar = idNotif > 0 && !['Cancelada', 'Devuelta', 'Rechazada'].includes(n.estado_reserva);
+
             const div = document.createElement('div');
             div.className = 'item-caja';
+            div.style.position = 'relative';
             div.innerHTML = `
-                <p class="estado-texto" style="color: ${color};">Estado: ${esc(n.estado_reserva)}</p>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                    <p class="estado-texto" style="color: ${color};margin:0;">Estado: ${esc(textoEstado)}</p>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                        <button type="button" class="btn btn-danger btn-sm" title="Eliminar notificación" onclick="borrarNotificacionCliente(${idNotif}, this)">🗑️</button>
+                        ${puedeCancelar ? `<button type="button" class="btn btn-warning btn-sm" onclick="cancelarReservaCliente(${idNotif}, this)">Cancelar reserva</button>` : ''}
+                    </div>
+                </div>
                 <p><strong>Instrumento:</strong> ${esc(n.instrumento_nombre)}</p>
                 <p><strong>Salida:</strong> ${verFecha(n.fecha_prestamo)}</p>
                 <p><strong>Límite:</strong> ${verFecha(n.fecha_devolucion_limite)}</p>
@@ -2114,6 +2370,40 @@ function detenerMusicaCatalogo() {
     if (!audio) return;
     audio.pause();
 }
+
+function pausarTodoAudioSegundoPlano() {
+    try {
+        if (typeof audioLampara !== 'undefined' && audioLampara && !audioLampara.paused) {
+            audioLampara.pause();
+        }
+    } catch (e) {}
+
+    try {
+        const audioCat = $('audioFondoCatalogo');
+        if (audioCat && !audioCat.paused) {
+            audioCat.pause();
+        }
+    } catch (e) {}
+}
+
+function reanudarAudioSiCorresponde() {
+    if (document.hidden) return;
+    const vistaCat = $('vista-catalogo');
+    const enCatalogo = vistaCat && vistaCat.style.display !== 'none';
+    if (enCatalogo && typeof iniciarMusicaCatalogo === 'function') {
+        iniciarMusicaCatalogo();
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        pausarTodoAudioSegundoPlano();
+    } else {
+        reanudarAudioSiCorresponde();
+    }
+});
+
+window.addEventListener('pagehide', pausarTodoAudioSegundoPlano);
 
 function toggleMusicaCatalogo() {
     const audio = $('audioFondoCatalogo');
