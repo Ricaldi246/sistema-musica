@@ -1303,10 +1303,12 @@ async function cargarCatalogo() {
                 <div class="instrument-info">
                     <div>
                         <h3>${esc(item.nombre)}</h3>
-                        <p><strong>Tipo:</strong> ${esc(item.tipo)}</p>
-                        <p><strong>Serie:</strong> ${esc(item.numero_serie)}</p>
-                        <p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
-                        <p><strong>Disponibilidad:</strong> ${badge}</p>
+<p><strong>Tipo:</strong> ${esc(item.tipo)}</p>
+<p><strong>Marca:</strong> ${esc(item.marca || '—')}</p>
+<p><strong>Modelo:</strong> ${esc(item.modelo || '—')}</p>
+<p><strong>Serie:</strong> ${esc(item.numero_serie)}</p>
+<p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
+<p><strong>Disponibilidad:</strong> ${badge}</p>
                     </div>
                     ${boton}
                 </div>
@@ -1576,6 +1578,8 @@ if (formInstrumento) {
                 body: {
                     nombre: $('nombre-instrumento').value,
                     tipo: $('tipo-instrumento').value,
+                    marca: $('marca-instrumento').value,
+                    modelo: $('modelo-instrumento').value,
                     numero_serie: $('num-serie').value,
                     estado_fisico: $('estado-fisico').value,
                     imagen

@@ -876,14 +876,16 @@ app.get('/api/disponibilidad', ruta(async (req, res) => {
 
 app.post('/api/instrumentos', autenticar, soloAdmin, ruta(async (req, res) => {
     const nombre = String(req.body.nombre || '').trim();
-    const tipo = String(req.body.tipo || '').trim();
-    const numero_serie = String(req.body.numero_serie || '').trim();
-    const { estado_fisico } = req.body;
-    let imagen = req.body.imagen || '';
+const tipo = String(req.body.tipo || '').trim();
+const marca = String(req.body.marca || '').trim();
+const modelo = String(req.body.modelo || '').trim();
+const numero_serie = String(req.body.numero_serie || '').trim();
+const { estado_fisico } = req.body;
+let imagen = req.body.imagen || '';
 
-    if (!nombre || !tipo || !numero_serie) {
-        return res.status(400).json({ error: 'Completa nombre, tipo y número de serie.' });
-    }
+if (!nombre || !tipo || !marca || !modelo || !numero_serie) {
+    return res.status(400).json({ error: 'Completa nombre, tipo, marca, modelo y número de serie.' });
+}
     if (!ESTADOS_FISICOS.includes(estado_fisico)) {
         return res.status(400).json({ error: 'Estado físico no válido.' });
     }
@@ -902,10 +904,10 @@ app.post('/api/instrumentos', autenticar, soloAdmin, ruta(async (req, res) => {
     }
 
     const { data, error } = await supabase
-        .from('instrumentos')
-        .insert([{ nombre, tipo, numero_serie, estado_fisico, imagen }])
-        .select('id')
-        .single();
+    .from('instrumentos')
+    .insert([{ nombre, tipo, marca, modelo, numero_serie, estado_fisico, imagen }])
+    .select('id')
+    .single();
     if (error) throw error;
 
     await registrarMovimiento('INSTRUMENTO', `Se registró "${nombre}" (serie ${numero_serie})`, req.usuario.nombre);
