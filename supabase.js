@@ -1,3 +1,4 @@
+console.log('DEBUG longitud de la clave:', (process.env.SUPABASE_SERVICE_KEY || '').length);
 const { createClient } = require('@supabase/supabase-js');
 
 // Credenciales de tu proyecto de Academia de Música en Supabase
