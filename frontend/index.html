@@ -503,7 +503,18 @@
                     <div class="tabla-scroll">
                         <table class="tabla-cards">
                             <thead>
-                                <tr><th>Acciones</th><th>ID</th><th>Foto</th><th>Instrumento</th><th>Tipo</th><th>N° de Serie</th><th>Estado Físico</th><th>Disponibilidad</th></tr>
+                                <tr>
+                                    <th>Acciones</th>
+                                    <th>ID</th>
+                                    <th>Foto</th>
+                                    <th>Instrumento</th>
+                                    <th>Tipo</th>
+                                    <th>Marca</th>
+                                    <th>Modelo</th>
+                                    <th>N° de Serie</th>
+                                    <th>Estado Físico</th>
+                                    <th>Disponibilidad</th>
+                                </tr>
                             </thead>
                             <tbody id="tabla-instrumentos"></tbody>
                         </table>
@@ -849,6 +860,10 @@
                 <input type="text" id="edit-inst-tipo" required>
                 <label for="edit-inst-serie">Número de serie:</label>
                 <input type="text" id="edit-inst-serie" required>
+                <label for="edit-inst-marca">Marca:</label>
+                <input type="text" id="edit-inst-marca" required>
+                <label for="edit-inst-modelo">Modelo:</label>
+                <input type="text" id="edit-inst-modelo" required>
                 <label for="edit-inst-estado">Estado físico:</label>
                 <select id="edit-inst-estado" required>
                     <option value="Óptimo">Óptimo</option>

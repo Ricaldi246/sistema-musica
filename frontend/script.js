@@ -1308,7 +1308,7 @@ async function cargarCatalogo() {
 <p><strong>Modelo:</strong> ${esc(item.modelo || '—')}</p>
 <p><strong>Serie:</strong> ${esc(item.numero_serie)}</p>
 <p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
-<p><strong>Disponibilidad:</strong> ${badge}</p>
+<p><strong>Disponibilidad:</strong> ${badge}</p>s
                     </div>
                     ${boton}
                 </div>
@@ -1609,7 +1609,7 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
     tbody.innerHTML = '';
 
     if (instrumentos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#777;">Aún no hay instrumentos registrados.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:#777;">Aún no hay instrumentos registrados.</td></tr>`;
         return;
     }
 
@@ -1624,14 +1624,16 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
         const fila = document.createElement('tr');
         fila.innerHTML = `
             <td data-label="Acciones">
-    <button type="button" class="btn btn-dark btn-sm" onclick="verDetalleInstrumento(${Number(item.id)})" title="Ver por ID">🔍</button>
-    <button type="button" class="btn btn-info btn-sm" onclick="abrirEditarInstrumento(${Number(item.id)})" title="Editar">✏️</button>
-    <button type="button" class="btn btn-danger btn-sm" onclick="eliminarInstrumento(${Number(item.id)}, this)" title="Eliminar">🗑️</button>
-</td>
+                <button type="button" class="btn btn-dark btn-sm" onclick="verDetalleInstrumento(${Number(item.id)})" title="Ver por ID">🔍</button>
+                <button type="button" class="btn btn-info btn-sm" onclick="abrirEditarInstrumento(${Number(item.id)})" title="Editar">✏️</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="eliminarInstrumento(${Number(item.id)}, this)" title="Eliminar">🗑️</button>
+            </td>
             <td data-label="ID">${Number(item.id)}</td>
             <td data-label="Foto">${foto}</td>
             <td data-label="Instrumento">${esc(item.nombre)}</td>
             <td data-label="Tipo">${esc(item.tipo)}</td>
+            <td data-label="Marca">${esc(item.marca || '—')}</td>
+            <td data-label="Modelo">${esc(item.modelo || '—')}</td>
             <td data-label="N° de serie">${esc(item.numero_serie)}</td>
             <td data-label="Estado físico"><select class="fila-estado" onchange="cambiarEstadoInstrumento(${Number(item.id)}, this.value)">${opciones}</select></td>
             <td data-label="Disponibilidad">${disponibilidad}</td>
@@ -1657,6 +1659,8 @@ async function verDetalleInstrumento(id) {
             <p><strong>ID:</strong> ${Number(item.id)}</p>
             <p><strong>Nombre:</strong> ${esc(item.nombre)}</p>
             <p><strong>Tipo:</strong> ${esc(item.tipo)}</p>
+            <p><strong>Marca:</strong> ${esc(item.marca || '—')}</p>
+            <p><strong>Modelo:</strong> ${esc(item.modelo || '—')}</p>
             <p><strong>N° de serie:</strong> ${esc(item.numero_serie)}</p>
             <p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
             <p><strong>Disponibilidad:</strong> ${esc(estadoDisp)}</p>

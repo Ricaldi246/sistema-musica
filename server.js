@@ -941,6 +941,12 @@ app.put('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) =>
     const tipo = req.body.tipo !== undefined
         ? String(req.body.tipo || '').trim()
         : actual.tipo;
+    const marca = req.body.marca !== undefined
+        ? String(req.body.marca || '').trim()
+        : actual.marca;
+    const modelo = req.body.modelo !== undefined
+        ? String(req.body.modelo || '').trim()
+        : actual.modelo;
     const numero_serie = req.body.numero_serie !== undefined
         ? String(req.body.numero_serie || '').trim()
         : actual.numero_serie;
@@ -962,7 +968,7 @@ app.put('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) =>
         }
     }
 
-    const cambios = { nombre, tipo, numero_serie, estado_fisico };
+    const cambios = { nombre, tipo, marca, modelo, numero_serie, estado_fisico };
 
     if (req.body.imagen !== undefined) {
         let imagen = String(req.body.imagen || '');
