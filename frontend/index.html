@@ -219,6 +219,7 @@
                                     </svg>
                                 </button>
                             </div>
+                            <a href="#" class="forgot-link" id="reenviarVerifLink" style="display: block; text-align: right; margin-top: 0.4rem;">¿No confirmaste tu correo? Reenviar</a>
                         </div>
                         <button type="submit" class="submit-btn" id="submitBtn">
                             <span class="btn-glow-layer"></span>
@@ -236,7 +237,6 @@
         </main>
     </div>
 
-<!-- ===================== CATÁLOGO ===================== -->
 <!-- ===================== CATÁLOGO ===================== -->
     <div id="vista-catalogo" style="display: none;">
         <!-- Audio de fondo continuo para el catálogo -->
@@ -259,7 +259,7 @@
                         <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                         <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
                     </svg>
-                    <svg class="catalog-sound-off hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                    <svg class="catalog-sound-off hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                         <line x1="23" y1="9" x2="17" y2="15"></line>
                         <line x1="17" y1="9" x2="23" y2="15"></line>
@@ -267,25 +267,6 @@
                 </button>
 
                 <div class="auth-nav" id="auth-nav" style="display: flex; align-items: center; gap: 10px;"></div>
-            </div>
-        </header>
-
-
-
-            <div class="auth-nav" id="auth-nav">
-                <!-- Botón de silenciar/activar música en la esquina superior derecha -->
-                <button class="sound-toggle" id="catalogSoundToggle" title="Silenciar / Activar música" aria-label="Toggle Catalog Sound" onclick="toggleMusicaCatalogo()">
-                    <svg class="sound-icon catalog-sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
-                    </svg>
-                    <svg class="sound-icon catalog-sound-off hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                        <line x1="23" y1="9" x2="17" y2="15"></line>
-                        <line x1="17" y1="9" x2="23" y2="15"></line>
-                    </svg>
-                </button>
             </div>
         </header>
 
@@ -634,7 +615,7 @@
                         <option value="qr">Pago por QR</option>
                     </select>
                     <div id="pago-tarjeta" class="pago-detalle">
-                        <label for="tarj-nombre">Nombre del titular:</label>
+                        <label for="tarj-titular">Nombre del titular:</label>
                         <input type="text" id="tarj-titular" placeholder="Como aparece en la tarjeta" autocomplete="cc-name">
                         <label for="tarj-numero">Número de tarjeta: <span id="tarj-marca" class="tarj-marca"></span></label>
                         <input type="text" id="tarj-numero" inputmode="numeric" placeholder="0000 0000 0000 0000" maxlength="19" autocomplete="cc-number">
@@ -680,7 +661,7 @@
                     
                     <input type="email" id="reg-email" placeholder="✉️ Correo electrónico" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
-                    <input type="password" id="reg-password" placeholder="🔒 Contraseña (mínimo 6 caracteres)" minlength="6" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    <input type="password" id="reg-password" placeholder="🔒 Contraseña (mínimo 8 caracteres)" minlength="8" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
                     <input type="text" id="reg-ci" placeholder="🆔 Carnet de Identidad (CI)" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
@@ -772,7 +753,10 @@
         <div class="modal-box modal-perfil-box">
             <h3>👤 Perfil de Usuario</h3>
             <div class="perfil-cabecera">
-                <img id="perfil-avatar-actual" class="perfil-avatar-grande" src="" alt="Avatar del usuario">
+                <div class="perfil-avatar-wrap">
+                    <img id="perfil-avatar-actual" class="perfil-avatar-grande" src="" alt="Avatar del usuario">
+                    <button type="button" id="btn-abrir-camara" class="btn-camara" title="Tomarme una selfie" aria-label="Tomarme una selfie" onclick="abrirCamara()">📷</button>
+                </div>
                 <div id="perfil-datos-lista" class="perfil-datos"></div>
             </div>
 
@@ -781,8 +765,73 @@
                 <div id="perfil-galeria-avatares" class="perfil-grid-avatares"></div>
             </div>
 
+            <button type="button" class="btn btn-info btn-block" onclick="abrirCredencial()">🪪 Credencial</button>
             <button type="button" class="btn btn-success btn-block" onclick="guardarAvatarPerfil()">Guardar avatar</button>
             <button type="button" class="btn btn-gray btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-perfil-usuario')">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- ===================== SELFIE (CÁMARA) ===================== -->
+    <!-- ===================== OLVIDÉ MI CONTRASEÑA (verificación de identidad) ===================== -->
+    <div id="modal-olvide-password" class="modal-overlay">
+        <div class="modal-box">
+            <h3>🔑 Recuperar contraseña</h3>
+            <p class="nota">Escribe los mismos datos con los que te registraste. Si coinciden, te daremos una contraseña temporal.</p>
+            <form id="form-olvide-password" onsubmit="enviarOlvidePassword(event)">
+                <div class="form-group">
+                    <label for="olvide-email">Correo electrónico</label>
+                    <input type="email" id="olvide-email" placeholder="Ingresa tu correo" required>
+                </div>
+                <div class="form-group">
+                    <label for="olvide-nombre">Nombre completo (tal como lo registraste)</label>
+                    <input type="text" id="olvide-nombre" placeholder="Nombre y apellidos" required>
+                </div>
+                <div class="form-group">
+                    <label for="olvide-ci">Cédula de identidad (CI)</label>
+                    <input type="text" id="olvide-ci" placeholder="Tu CI" required>
+                </div>
+                <div class="form-group">
+                    <label for="olvide-telefono">Teléfono</label>
+                    <input type="text" id="olvide-telefono" placeholder="Tu teléfono" required>
+                </div>
+                <button type="submit" class="btn btn-success btn-block">Verificar mis datos</button>
+                <button type="button" class="btn btn-gray btn-block" style="margin-top: 0.5rem;" onclick="cerrarModal('modal-olvide-password')">Cancelar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================== CONTRASEÑA TEMPORAL GENERADA ===================== -->
+    <div id="modal-password-temporal" class="modal-overlay">
+        <div class="modal-box">
+            <h3>✅ Identidad verificada</h3>
+            <p class="nota">Esta es tu nueva contraseña temporal. Apúntala, no se mostrará de nuevo. Te recomendamos cambiarla luego desde "🔑 Contraseña" en tu perfil.</p>
+            <p id="password-temporal-valor" style="font-size: 1.4rem; font-weight: 800; letter-spacing: 2px; text-align: center; background: #f1efff; border: 2px dashed #6c5ce7; border-radius: 10px; padding: 14px; margin: 10px 0; word-break: break-all;"></p>
+            <button type="button" class="btn btn-info btn-block" onclick="copiarPasswordTemporal()">📋 Copiar</button>
+            <button type="button" class="btn btn-success btn-block" style="margin-top: 0.5rem;" onclick="irALoginConPasswordTemporal()">Ir a iniciar sesión</button>
+        </div>
+    </div>
+
+    <div id="modal-camara" class="modal-overlay">
+        <div class="modal-box modal-perfil-box">
+            <h3>📷 Tómate una selfie</h3>
+            <div class="camara-caja">
+                <video id="camara-video" autoplay playsinline muted></video>
+            </div>
+            <p id="camara-aviso" class="nota" style="text-align: center;">Centra tu rostro dentro del círculo.</p>
+            <button type="button" id="btn-camara-capturar" class="btn btn-success btn-block" onclick="tomarFoto()" disabled>📸 Tomar foto</button>
+            <button type="button" class="btn btn-info btn-block" onclick="$('selfie-archivo').click()">📁 Subir una foto</button>
+            <button type="button" class="btn btn-gray btn-block" onclick="cerrarCamara()">Cancelar</button>
+            <input type="file" id="selfie-archivo" accept="image/*" capture="user" hidden onchange="subirFotoArchivo(event)">
+        </div>
+    </div>
+
+    <!-- ===================== CREDENCIAL ===================== -->
+    <div id="modal-credencial" class="modal-overlay">
+        <div class="modal-box modal-perfil-box">
+            <h3>🪪 Tu credencial</h3>
+            <img id="credencial-vista" class="credencial-vista" src="" alt="Credencial del cliente">
+            <button type="button" class="btn btn-success btn-block" onclick="descargarCredencial()">⬇️ Descargar credencial (PNG)</button>
+            <button type="button" class="btn btn-gray btn-block" onclick="cerrarModal('modal-credencial')">Cerrar</button>
         </div>
     </div>
 

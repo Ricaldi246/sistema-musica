@@ -1,9 +1,15 @@
-/// =====================================================================
-//  ESTADO GLOBAL Y UTILIDADES
-// =====================================================================
 // =====================================================================
 //  UTILIDADES Y ESTADO GLOBAL
 // =====================================================================
+// La lámpara del login necesita GSAP (se descarga de internet). Si no cargó, se avisa
+// en pantalla en vez de dejar la página en blanco.
+if (typeof gsap === 'undefined' || typeof Draggable === 'undefined') {
+    document.body.insertAdjacentHTML('afterbegin',
+        '<p style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;' +
+        'padding:24px;margin:0;background:#111;color:#fff;font:16px sans-serif;text-align:center;">' +
+        'No se pudo cargar la librería de animaciones (GSAP). Revisa tu conexión a internet y recarga la página.</p>');
+    throw new Error('GSAP no se cargó.');
+}
 const $ = (id) => document.getElementById(id);
 const pad = (n) => String(n).padStart(2, '0');
 const random = (min, max) => Math.random() * (max - min) + min;
@@ -177,8 +183,8 @@ function actualizarIconosSonidoLogin() {
   if (!soundToggle) return;
   const onIcon = soundToggle.querySelector(".sound-on");
   const offIcon = soundToggle.querySelector(".sound-off");
-  if (onIcon) onIcon.style.display = isSoundEnabled ? "" : "none";
-  if (offIcon) offIcon.style.display = isSoundEnabled ? "none" : "";
+  if (onIcon) onIcon.classList.toggle("hidden", !isSoundEnabled);
+  if (offIcon) offIcon.classList.toggle("hidden", isSoundEnabled);
   soundToggle.setAttribute("aria-pressed", String(!isSoundEnabled));
   soundToggle.setAttribute("title", isSoundEnabled ? "Silenciar música" : "Activar música");
 }
@@ -536,7 +542,27 @@ if (soundToggle) {
   if (forgotLink) {
     forgotLink.addEventListener("click", (e) => {
       e.preventDefault();
-      toast("Para recuperar tu contraseña comunícate con el administrador de la academia.");
+      const campoEmail = $('olvide-email');
+      if (campoEmail) campoEmail.value = $('login-email') ? $('login-email').value : '';
+      abrirModal('modal-olvide-password');
+    });
+  }
+
+  const reenviarVerifLink = document.getElementById("reenviarVerifLink");
+  if (reenviarVerifLink) {
+    reenviarVerifLink.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const email = ($('login-email') ? $('login-email').value : '').trim();
+      if (!email) {
+        toast('Escribe primero tu correo arriba.', 'error');
+        return;
+      }
+      try {
+        const r = await api('/api/reenviar-verificacion', { method: 'POST', body: { email } });
+        toast(r.mensaje || 'Si corresponde, te reenviamos el enlace.');
+      } catch (err) {
+        toast(err.message, 'error');
+      }
     });
   }
 
@@ -719,9 +745,12 @@ async function cargarPrestamosYDevoluciones() {
 
     prestamosCache.forEach((p) => {
         const activo = p.estado === 'Activo';
+        const cancelado = /cancel/i.test(String(p.estado || ''));
         const celdaCronometro = activo
             ? `<td class="cronometro" data-label="Cronómetro" data-salida="${esc(p.fecha_prestamo)}" data-limite="${esc(p.fecha_devolucion_limite)}">…</td>`
-            : `<td data-label="Cronómetro">Devuelto el<br>${verFecha(p.fecha_devolucion_real)}</td>`;
+            : (cancelado
+                ? `<td data-label="Cronómetro">Cancelado</td>`
+                : `<td data-label="Cronómetro">Devuelto el<br>${verFecha(p.fecha_devolucion_real)}</td>`);
 
         const detalleMulta = (!activo && (p.multa_retraso || p.multa_dano))
             ? `<br><small>Retraso: ${moneda(p.multa_retraso)}<br>Daño (${esc(p.nivel_dano)}): ${moneda(p.multa_dano)}</small>`
@@ -729,7 +758,7 @@ async function cargarPrestamosYDevoluciones() {
 
         const yaFinalizado = !activo || /cancel/i.test(String(p.estado || ''));
 const acciones = `
-    ${activo ? `<button type="button" class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : '<span>Completado</span>'}
+    ${activo ? `<button type="button" class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : `<span>${cancelado ? 'Cancelado' : 'Completado'}</span>`}
     ${activo ? `<button type="button" class="btn btn-danger btn-sm" onclick="eliminarPrestamo(${Number(p.id)}, this)" title="Anular préstamo activo">🗑️</button>` : ''}
     <button type="button" class="btn btn-dark btn-sm" onclick="verActa(${Number(p.id)})">Acta</button>
     ${yaFinalizado ? `<button type="button" class="btn btn-danger btn-sm" onclick="borrarRegistroPrestamoAdmin(${Number(p.id)}, this)" title="Borrar registro completado/cancelado">🗑️</button>` : ''}
@@ -793,8 +822,7 @@ async function ejecutarRegistro(e) {
         $('login-email').value = $('reg-email').value; // deja el correo listo en el login
         $('form-registro').reset();
         cerrarModal('modal-registro');
-        toast('Registro exitoso. Ya puedes iniciar sesión.');
-        $('login-password').focus();
+        toast('Te enviamos un correo para confirmar tu cuenta. Revisa tu bandeja (o spam) antes de iniciar sesión.');
     } catch (err) {
         toast(err.message, 'error');
     }
@@ -1020,9 +1048,7 @@ async function cancelarReservaCliente(id, boton) {
         await api(`/api/mis-reservas/${numId}/cancelar`, { method: 'POST' });
         toast('Reserva cancelada. Se notificó al administrador.');
         await abrirBandejaCliente();
-        if (typeof cargarBandejaReservasAdmin === 'function') {
-            cargarBandejaReservasAdmin().catch(() => {});
-        }
+        cargarCatalogo();
     } catch (err) {
         toast(err.message || 'No se pudo cancelar la reserva.', 'error');
     }
@@ -1296,7 +1322,7 @@ if (campoCvv) {
 }
 
 function limpiarDatosTarjeta() {
-    ['tarj-nombre', 'tarj-numero', 'tarj-venc', 'tarj-cvv'].forEach((id) => {
+    ['tarj-titular', 'tarj-numero', 'tarj-vence', 'tarj-cvv'].forEach((id) => {
         const el = $(id);
         if (el) el.value = '';
     });
@@ -1308,22 +1334,30 @@ function limpiarDatosTarjeta() {
 
 // Devuelve el texto del error, o null si la tarjeta es válida
 function validarTarjeta() {
-    const titular = (($('tarj-nombre') || $('tarj-titular'))?.value || '').trim();
+    const titular = ($('tarj-titular')?.value || '').trim();
     const numLimpio = ($('tarj-numero')?.value || '').replace(/\D/g, '');
-    const venc = ($('tarj-venc')?.value || '').trim();
+    const venc = ($('tarj-vence')?.value || '').trim();
     const cvv = ($('tarj-cvv')?.value || '').replace(/\D/g, '');
+    const esAmex = /^3[47]/.test(numLimpio);
 
     if (!titular) return 'Ingresa el nombre del titular de la tarjeta.';
     if (numLimpio.length < 13 || numLimpio.length > 19) {
         return 'El número de tarjeta debe tener entre 13 y 19 dígitos.';
     }
-    if (venc && !/^\d{2}\/\d{2}$/.test(venc)) {
-        return 'Usa el formato MM/AA en la fecha de vencimiento.';
+    if (!luhnValido(numLimpio)) return 'El número de tarjeta no es válido. Revísalo.';
+
+    const m = /^(\d{2})\/(\d{2})$/.exec(venc);
+    if (!m) return 'Usa el formato MM/AA en la fecha de vencimiento.';
+    const mes = Number(m[1]);
+    const anio = 2000 + Number(m[2]);
+    if (mes < 1 || mes > 12) return 'El mes de vencimiento no es válido.';
+    const hoy = new Date();
+    if (anio < hoy.getFullYear() || (anio === hoy.getFullYear() && mes < hoy.getMonth() + 1)) {
+        return 'La tarjeta está vencida.';
     }
-    if (cvv && (cvv.length < 3 || cvv.length > 4)) {
-        return 'El CVV debe tener 3 o 4 dígitos.';
-    }
-    return '';
+
+    if (cvv.length !== (esAmex ? 4 : 3)) return `El CVV debe tener ${esAmex ? 4 : 3} dígitos.`;
+    return null;
 }
 
 function cambiarMetodoPago() {
@@ -1355,8 +1389,10 @@ function cargarQrPago() {
     img.src = `/api/qr/imagen?t=${Date.now()}`;
 }
 
+let enviandoReserva = false;
 async function enviarReservaVirtual(e) {
     e.preventDefault();
+    if (enviandoReserva) return;
     const salida = $('res-fecha-salida').value;
     const limite = $('res-fecha-limite').value;
     if (new Date(limite) <= new Date(salida)) {
@@ -1376,6 +1412,7 @@ async function enviarReservaVirtual(e) {
         return;
     }
 
+    enviandoReserva = true;
     try {
         await api('/api/reservas', {
             method: 'POST',
@@ -1399,6 +1436,8 @@ async function enviarReservaVirtual(e) {
         cargarCatalogo();
     } catch (err) {
         toast(err.message, 'error');
+    } finally {
+        enviandoReserva = false;
     }
 }
 
@@ -1464,6 +1503,7 @@ if (formInstrumento) {
             });
             formInstrumento.reset();
             $('vista-previa-foto').style.display = 'none';
+            toast('Instrumento registrado con éxito.');
             cambiarPanel(1);
         } catch (err) {
             toast(err.message, 'error');
@@ -1636,33 +1676,6 @@ async function guardarEdicionInstrumento(e) {
     }
 }
 
-async function verDetalleInstrumento(id) {
-    try {
-        const [item, disp] = await Promise.all([
-            api(`/api/instrumentos/${Number(id)}`),
-            api('/api/disponibilidad')
-        ]);
-        const ocupados = new Set(disp.ocupados || []);
-        const estadoDisp = item.estado_fisico === 'En reparación'
-            ? 'En reparación'
-            : (ocupados.has(item.id) ? 'En uso' : 'Disponible');
-        const urlFoto = item.imagen || item.foto || '';
-
-        $('detalle-instrumento-ficha').innerHTML = `
-            ${urlFoto ? `<img src="${esc(urlFoto)}" alt="${esc(item.nombre)}" class="foto-previa" style="display:block; margin-bottom:10px;">` : ''}
-            <p><strong>ID:</strong> ${Number(item.id)}</p>
-            <p><strong>Nombre:</strong> ${esc(item.nombre)}</p>
-            <p><strong>Tipo:</strong> ${esc(item.tipo)}</p>
-            <p><strong>N° de serie:</strong> ${esc(item.numero_serie)}</p>
-            <p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
-            <p><strong>Disponibilidad:</strong> ${esc(estadoDisp)}</p>
-        `;
-        abrirModal('modal-detalle-instrumento');
-    } catch (err) {
-        toast(err.message, 'error');
-    }
-}
-
 // =====================================================================
 //  ADMIN: PRÉSTAMOS (CON FIRMA DIGITAL)
 // =====================================================================
@@ -1777,6 +1790,7 @@ if (formPrestamo) {
             });
             formPrestamo.reset();
             limpiarFirma();
+            toast('Préstamo registrado con éxito.');
             cambiarPanel(3);
         } catch (err) {
             toast(err.message, 'error');
@@ -1814,52 +1828,6 @@ function actualizarCronometros() {
             td.textContent = `⚠️ Retraso ${formatearDuracion(ahora - limite)}`;
         }
     });
-}
-
-async function cargosYDevoluciones() {
-    const tbody = $('tabla-devoluciones');
-    if (!tbody) return;
-    try {
-        prestamosCache = await api('/api/prestamos');
-    } catch (err) { toast(err.message, 'error'); return; }
-
-    tbody.innerHTML = '';
-    if (prestamosCache.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#777;">Aún no hay préstamos registrados.</td></tr>`;
-        return;
-    }
-
-    prestamosCache.forEach((p) => {
-        const activo = p.estado === 'Activo';
-        const celdaCronometro = activo
-            ? `<td class="cronometro" data-label="Cronómetro" data-salida="${esc(p.fecha_prestamo)}" data-limite="${esc(p.fecha_devolucion_limite)}">…</td>`
-            : `<td data-label="Cronómetro">Devuelto el<br>${verFecha(p.fecha_devolucion_real)}</td>`;
-
-        const detalleMulta = (!activo && (p.multa_retraso || p.multa_dano))
-            ? `<br><small>Retraso: ${moneda(p.multa_retraso)}<br>Daño (${esc(p.nivel_dano)}): ${moneda(p.multa_dano)}</small>`
-            : '';
-
-        const acciones = `
-    ${activo ? `<button type="button" class="btn btn-success btn-sm" onclick="abrirDevolucion(${Number(p.id)})">Devolver</button>` : '<span>Completado</span>'}
-    ${activo ? `<button type="button" class="btn btn-danger btn-sm" onclick="eliminarPrestamo(${Number(p.id)}, this)" title="Anular préstamo activo">🗑️</button>` : ''}
-    <button type="button" class="btn btn-dark btn-sm" onclick="verActa(${Number(p.id)})">Acta</button>
-`;
-
-        const fila = document.createElement('tr');
-        fila.innerHTML = `
-            <td data-label="ID">${Number(p.id)}</td>
-            <td data-label="Instrumento">${esc(p.nombre || '(instrumento eliminado)')}${p.es_virtual ? '<br><small>🌐 Reserva virtual</small>' : ''}</td>
-            <td data-label="Solicitante">${esc(p.solicitante)}</td>
-            <td data-label="Salida / Límite">Salida: ${verFecha(p.fecha_prestamo)}<br>Límite: ${verFecha(p.fecha_devolucion_limite)}</td>
-            ${celdaCronometro}
-            <td data-label="Multa"><strong>${moneda(p.multa)}</strong>${detalleMulta}</td>
-            <td data-label="Acción">${acciones}</td>
-        `;
-        tbody.appendChild(fila);
-    });
-
-    actualizarCronometros();
-    intervaloCronometro = setInterval(actualizarCronometros, 1000);
 }
 
 async function eliminarPrestamo(id, boton) {
@@ -2424,8 +2392,8 @@ function toggleMusicaCatalogo() {
 function actualizarIconosBocina(silenciado) {
     const iconoOn = document.querySelector('.catalog-sound-on');
     const iconoOff = document.querySelector('.catalog-sound-off');
-    if (iconoOn) iconoOn.style.display = silenciado ? 'none' : 'block';
-    if (iconoOff) iconoOff.style.display = silenciado ? 'block' : 'none';
+    if (iconoOn) iconoOn.classList.toggle('hidden', silenciado);
+    if (iconoOff) iconoOff.classList.toggle('hidden', !silenciado);
 }
 
 // MAGIA PURA: En cuanto recargues (F5) y hagas un solo clic en cualquier parte, la música arranca sola
@@ -2485,14 +2453,13 @@ const AVATARES_DISPONIBLES = [
 
 let avatarSeleccionadoTemp = null;
 
-function claveAvatarUsuario(usuario) {
-    const identificador = (usuario && (usuario.id || usuario.email || usuario.nombre)) || 'anonimo';
-    return `avatar_usuario_${String(identificador).toLowerCase()}`;
-}
-
 function obtenerAvatarUsuario(usuario) {
-    const clave = claveAvatarUsuario(usuario);
-    const guardadoId = localStorage.getItem(clave);
+    // La foto de perfil y el avatar elegido viven en el servidor (junto al usuario),
+    // así que se ven igual sin importar desde qué celular o computadora entres.
+    if (usuario && usuario.foto_url) {
+        return { id: 'foto', nombre: 'Mi foto', src: usuario.foto_url };
+    }
+    const guardadoId = usuario && usuario.avatar_id;
     return AVATARES_DISPONIBLES.find((a) => a.id === guardadoId) || AVATARES_DISPONIBLES[0];
 }
 
@@ -2522,6 +2489,19 @@ function renderizarGaleriaAvatares() {
     });
 }
 
+function pintarDatosPerfil(u) {
+    const datosEl = $('perfil-datos-lista');
+    if (!datosEl) return;
+    datosEl.innerHTML = `
+        <p><strong>Nombre:</strong> ${esc(u.nombre || '—')}</p>
+        <p><strong>Correo:</strong> ${esc(u.email || u.correo || '—')}</p>
+        <p><strong>CI:</strong> ${esc(u.ci || '—')}</p>
+        <p><strong>Teléfono:</strong> ${esc(u.telefono || '—')}</p>
+        <p><strong>Código:</strong> ${esc(u.codigo_cliente || '—')}</p>
+        <p><strong>Rol:</strong> ${esc(u.tipo || 'Usuario')}</p>
+    `;
+}
+
 function abrirModalPerfil() {
     const sesion = getSesion();
     if (!sesion || !sesion.usuario) {
@@ -2538,26 +2518,410 @@ function abrirModalPerfil() {
         imgGrande.alt = actual.nombre;
     }
 
-    const datosEl = $('perfil-datos-lista');
-    if (datosEl) {
-        datosEl.innerHTML = `
-            <p><strong>Nombre:</strong> ${esc(u.nombre || '—')}</p>
-            <p><strong>Correo:</strong> ${esc(u.email || u.correo || '—')}</p>
-            <p><strong>CI:</strong> ${esc(u.ci || '—')}</p>
-            <p><strong>Teléfono:</strong> ${esc(u.telefono || '—')}</p>
-            <p><strong>Rol:</strong> ${esc(u.tipo || 'Usuario')}</p>
-        `;
-    }
-
+    pintarDatosPerfil(u);
     renderizarGaleriaAvatares();
     abrirModal('modal-perfil-usuario');
+
+    // Pide al servidor los datos al día (incluye el código de cliente y la foto)
+    api('/api/mi-perfil').then((perfil) => {
+        const s = getSesion();
+        if (!s || !s.usuario) return;
+        s.usuario = { ...s.usuario, ...perfil };
+        guardarSesion(s);
+        pintarDatosPerfil(s.usuario);
+        const av = obtenerAvatarUsuario(s.usuario);
+        avatarSeleccionadoTemp = av;
+        const imgGrande2 = $('perfil-avatar-actual');
+        if (imgGrande2) { imgGrande2.src = av.src; imgGrande2.alt = av.nombre; }
+        renderizarGaleriaAvatares();
+        verificarSesionUI();
+    }).catch(() => {});
 }
 
-function guardarAvatarPerfil() {
+async function guardarAvatarPerfil() {
     const sesion = getSesion();
     if (!sesion || !sesion.usuario || !avatarSeleccionadoTemp) return;
-    localStorage.setItem(claveAvatarUsuario(sesion.usuario), avatarSeleccionadoTemp.id);
-    verificarSesionUI();
-    cerrarModal('modal-perfil-usuario');
-    toast(`Avatar "${avatarSeleccionadoTemp.nombre}" guardado.`);
+
+    if (avatarSeleccionadoTemp.id === 'foto') {
+        // La foto ya quedó guardada en el servidor en cuanto te la tomaste
+        cerrarModal('modal-perfil-usuario');
+        toast('Tu foto ya está guardada.');
+        return;
+    }
+    try {
+        const perfil = await api('/api/mi-perfil/avatar', { method: 'POST', body: { avatar_id: avatarSeleccionadoTemp.id } });
+        sesion.usuario = { ...sesion.usuario, ...perfil };
+        guardarSesion(sesion);
+        verificarSesionUI();
+        cerrarModal('modal-perfil-usuario');
+        toast(`Avatar "${avatarSeleccionadoTemp.nombre}" guardado.`);
+    } catch (err) {
+        toast(err.message, 'error');
+    }
 }
+
+// =====================================================================
+//  SELFIE CON LA CÁMARA
+// =====================================================================
+let streamCamara = null;
+
+async function abrirCamara() {
+    const aviso = $('camara-aviso');
+    const btnTomar = $('btn-camara-capturar');
+    aviso.textContent = 'Centra tu rostro dentro del círculo.';
+    btnTomar.disabled = true;
+    abrirModal('modal-camara');
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        aviso.textContent = 'Este navegador no permite usar la cámara aquí (necesita https o localhost). Puedes subir una foto.';
+        return;
+    }
+    try {
+        streamCamara = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 960 } },
+            audio: false
+        });
+        const video = $('camara-video');
+        video.srcObject = streamCamara;
+        await video.play().catch(() => {});
+        btnTomar.disabled = false;
+    } catch (err) {
+        aviso.textContent = err && err.name === 'NotAllowedError'
+            ? 'Bloqueaste el permiso de la cámara. Actívalo en el candado de la barra de direcciones, o sube una foto.'
+            : 'No se encontró ninguna cámara. Puedes subir una foto.';
+    }
+}
+
+function detenerCamara() {
+    if (streamCamara) {
+        streamCamara.getTracks().forEach((t) => t.stop());
+        streamCamara = null;
+    }
+    const video = $('camara-video');
+    if (video) video.srcObject = null;
+}
+
+function cerrarCamara() {
+    detenerCamara();
+    cerrarModal('modal-camara');
+}
+
+// Recorta el centro de la imagen en un cuadrado de 480x480 y lo convierte a JPEG liviano
+function recortarCuadrado(fuente, ancho, alto) {
+    const lado = Math.min(ancho, alto);
+    const canvas = document.createElement('canvas');
+    canvas.width = 480;
+    canvas.height = 480;
+    canvas.getContext('2d').drawImage(fuente, (ancho - lado) / 2, (alto - lado) / 2, lado, lado, 0, 0, 480, 480);
+    return canvas.toDataURL('image/jpeg', 0.85);
+}
+
+async function guardarSelfie(dataUrl) {
+    const sesion = getSesion();
+    if (!sesion || !sesion.usuario) return;
+    toast('Subiendo tu foto…');
+    try {
+        const { foto_url } = await api('/api/mi-perfil/foto', { method: 'POST', body: { imagen: dataUrl } });
+        sesion.usuario.foto_url = foto_url;
+        guardarSesion(sesion);
+        avatarSeleccionadoTemp = { id: 'foto', nombre: 'Mi foto', src: foto_url };
+        const img = $('perfil-avatar-actual');
+        if (img) {
+            img.src = foto_url;
+            img.alt = 'Mi foto';
+        }
+        renderizarGaleriaAvatares();
+        verificarSesionUI();
+        toast('📸 Foto guardada. Ahora es tu foto de perfil.');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+function tomarFoto() {
+    const video = $('camara-video');
+    if (!video || !video.videoWidth) {
+        toast('La cámara aún no está lista.', 'error');
+        return;
+    }
+    guardarSelfie(recortarCuadrado(video, video.videoWidth, video.videoHeight));
+    cerrarCamara();
+}
+
+function subirFotoArchivo(e) {
+    const archivo = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!archivo) return;
+    if (!archivo.type.startsWith('image/')) {
+        toast('Elige un archivo de imagen.', 'error');
+        return;
+    }
+    const lector = new FileReader();
+    lector.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+            guardarSelfie(recortarCuadrado(img, img.naturalWidth, img.naturalHeight));
+            cerrarCamara();
+        };
+        img.onerror = () => toast('No se pudo leer esa imagen.', 'error');
+        img.src = lector.result;
+    };
+    lector.readAsDataURL(archivo);
+}
+
+// =====================================================================
+//  CREDENCIAL DEL CLIENTE (imagen PNG descargable)
+// =====================================================================
+let credencialDataUrl = '';
+let credencialNombreArchivo = 'credencial.png';
+const FUENTE_CREDENCIAL = '"Segoe UI", Roboto, Arial, sans-serif';
+
+function cargarImagen(src) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // necesario para poder "recortar" fotos que vienen de Supabase
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+}
+
+// Reduce la letra (y si hace falta recorta con "…") para que el texto quepa en el ancho dado
+function ajustarTexto(ctx, texto, anchoMax, tamInicial, tamMin, peso) {
+    let tam = tamInicial;
+    ctx.font = `${peso} ${tam}px ${FUENTE_CREDENCIAL}`;
+    while (ctx.measureText(texto).width > anchoMax && tam > tamMin) {
+        tam -= 2;
+        ctx.font = `${peso} ${tam}px ${FUENTE_CREDENCIAL}`;
+    }
+    let t = String(texto);
+    while (ctx.measureText(t).width > anchoMax && t.length > 1) {
+        t = t.slice(0, -2).trimEnd() + '…';
+    }
+    return t;
+}
+
+function rectRedondeado(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function dibujarCredencial(u, foto) {
+    const W = 640;
+    const H = 1000;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Fondo y marco
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    rectRedondeado(ctx, 0, 0, W, H, 36);
+    ctx.clip();
+
+    // Cabecera
+    const grad = ctx.createLinearGradient(0, 0, W, 190);
+    grad.addColorStop(0, '#5b4bd6');
+    grad.addColorStop(1, '#a29bfe');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 190);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 34px ${FUENTE_CREDENCIAL}`;
+    ctx.fillText('🎵 ACADEMIA DE MÚSICA', W / 2, 74);
+    ctx.font = `600 20px ${FUENTE_CREDENCIAL}`;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('CREDENCIAL DE CLIENTE', W / 2, 112);
+
+    // Foto circular
+    const cx = W / 2;
+    const cy = 280;
+    const r = 105;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 12, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#6c5ce7';
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    if (foto) {
+        const lado = Math.min(foto.naturalWidth || foto.width, foto.naturalHeight || foto.height);
+        const fw = foto.naturalWidth || foto.width;
+        const fh = foto.naturalHeight || foto.height;
+        ctx.drawImage(foto, (fw - lado) / 2, (fh - lado) / 2, lado, lado, cx - r, cy - r, r * 2, r * 2);
+    } else {
+        ctx.fillStyle = '#dfe6e9';
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        ctx.fillStyle = '#6c5ce7';
+        ctx.font = `800 90px ${FUENTE_CREDENCIAL}`;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(u.nombre || '?').trim().charAt(0).toUpperCase(), cx, cy);
+        ctx.textBaseline = 'alphabetic';
+    }
+    ctx.restore();
+
+    // Nombre (debajo de la foto)
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#2d3436';
+    const nombre = ajustarTexto(ctx, u.nombre || '—', W - 90, 40, 22, 800);
+    ctx.fillText(nombre, W / 2, 450);
+    ctx.fillStyle = '#6c5ce7';
+    ctx.font = `700 18px ${FUENTE_CREDENCIAL}`;
+    ctx.fillText(String(u.tipo === 'admin' ? 'ADMINISTRADOR' : 'CLIENTE'), W / 2, 485);
+
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(60, 515);
+    ctx.lineTo(W - 60, 515);
+    ctx.stroke();
+
+    // Datos
+    const filas = [
+        ['CORREO ELECTRÓNICO', u.email || u.correo || '—'],
+        ['CÉDULA DE IDENTIDAD (CI)', u.ci || '—'],
+        ['TELÉFONO', u.telefono || '—']
+    ];
+    ctx.textAlign = 'left';
+    filas.forEach(([etiqueta, valor], i) => {
+        const y = 565 + i * 82;
+        ctx.fillStyle = '#636e72';
+        ctx.font = `700 16px ${FUENTE_CREDENCIAL}`;
+        ctx.fillText(etiqueta, 60, y);
+        ctx.fillStyle = '#2d3436';
+        const texto = ajustarTexto(ctx, String(valor), W - 120, 28, 16, 600);
+        ctx.fillText(texto, 60, y + 36);
+    });
+
+    // Código de cliente
+    ctx.fillStyle = '#f1efff';
+    rectRedondeado(ctx, 50, 810, W - 100, 130, 20);
+    ctx.fill();
+    ctx.strokeStyle = '#6c5ce7';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#636e72';
+    ctx.font = `700 16px ${FUENTE_CREDENCIAL}`;
+    ctx.fillText('CÓDIGO DE CLIENTE', W / 2, 845);
+    ctx.fillStyle = '#3b2fb5';
+    ctx.font = `800 58px "Courier New", monospace`;
+    ctx.fillText(u.codigo_cliente || '—', W / 2, 912);
+
+    // Pie
+    ctx.fillStyle = '#6c5ce7';
+    ctx.fillRect(0, H - 34, W, 34);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `600 15px ${FUENTE_CREDENCIAL}`;
+    ctx.fillText('Emitida el ' + new Date().toLocaleDateString('es-BO'), W / 2, H - 12);
+
+    ctx.restore();
+    return canvas;
+}
+
+async function abrirCredencial() {
+    let sesion = getSesion();
+    if (!sesion || !sesion.usuario) {
+        toast('Inicia sesión para ver tu credencial.', 'error');
+        return;
+    }
+    // Datos al día desde el servidor (de ahí viene el código de cliente)
+    try {
+        const perfil = await api('/api/mi-perfil');
+        sesion = getSesion();
+        sesion.usuario = { ...sesion.usuario, ...perfil };
+        guardarSesion(sesion);
+        pintarDatosPerfil(sesion.usuario);
+    } catch (_) { /* se usan los datos guardados */ }
+
+    const u = sesion.usuario;
+    if (!u.codigo_cliente) {
+        toast('No se pudo obtener tu código de cliente. Reinicia el servidor y vuelve a iniciar sesión.', 'error');
+        return;
+    }
+
+    let foto = null;
+    try {
+        foto = await cargarImagen(obtenerAvatarUsuario(u).src);
+    } catch (_) { /* se dibuja con la inicial del nombre */ }
+
+    credencialDataUrl = dibujarCredencial(u, foto).toDataURL('image/png');
+    credencialNombreArchivo = `credencial-${u.codigo_cliente}.png`;
+    $('credencial-vista').src = credencialDataUrl;
+    abrirModal('modal-credencial');
+}
+
+function descargarCredencial() {
+    if (!credencialDataUrl) return;
+    const a = document.createElement('a');
+    a.href = credencialDataUrl;
+    a.download = credencialNombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast('Credencial descargada.');
+}
+
+// =====================================================================
+//  "OLVIDÉ MI CONTRASEÑA" (verificando tu identidad, no por enlace de correo)
+// =====================================================================
+async function enviarOlvidePassword(e) {
+    e.preventDefault();
+    const cuerpo = {
+        email: ($('olvide-email').value || '').trim(),
+        nombre: ($('olvide-nombre').value || '').trim(),
+        ci: ($('olvide-ci').value || '').trim(),
+        telefono: ($('olvide-telefono').value || '').trim()
+    };
+    try {
+        const r = await api('/api/recuperar-password', { method: 'POST', body: cuerpo });
+        cerrarModal('modal-olvide-password');
+        $('password-temporal-valor').textContent = r.password_temporal;
+        abrirModal('modal-password-temporal');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+function copiarPasswordTemporal() {
+    const texto = $('password-temporal-valor').textContent;
+    navigator.clipboard.writeText(texto)
+        .then(() => toast('Contraseña copiada.'))
+        .catch(() => toast('No se pudo copiar. Cópiala a mano.', 'error'));
+}
+
+function irALoginConPasswordTemporal() {
+    cerrarModal('modal-password-temporal');
+    const email = $('olvide-email') ? $('olvide-email').value : '';
+    if ($('login-email')) $('login-email').value = email;
+    if ($('login-password')) $('login-password').focus();
+}
+
+// =====================================================================
+//  CONFIRMACIÓN DE CORREO (enlace que llega al registrarse)
+// =====================================================================
+(async function revisarEnlaceDeVerificacion() {
+    const m = /^#verificar=(.+)$/.exec(location.hash);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    try {
+        const r = await api('/api/verificar-correo', { method: 'POST', body: { token: decodeURIComponent(m[1]) } });
+        toast(r.mensaje || '¡Correo confirmado!');
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+})();

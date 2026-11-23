@@ -4,6 +4,12 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 
+// nodemailer es opcional: hasta que no hagas "npm install nodemailer" y configures el
+// SMTP en el .env, "Olvidé mi contraseña" sigue funcionando, solo que no envía el correo
+// (el enlace queda escrito en esta consola, para que puedas probarlo tú mismo).
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); } catch (_) { /* aún no instalado */ }
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -25,32 +31,72 @@ const CONFIG = {
     }
 };
 const ESTADOS_FISICOS = ['Óptimo', 'Desgaste regular', 'En reparación'];
+const TIPOS_SOLICITANTE = ['Alumno', 'Profesor', 'Persona común'];
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'frontend')));
+
+// Si existe la carpeta "frontend" se sirve entera. Si todos tus archivos están juntos en una
+// sola carpeta, solo se publican los archivos del sitio (NUNCA server.js ni supabase.js).
+const DIR_FRONTEND = path.join(__dirname, 'frontend');
+const HAY_CARPETA_FRONTEND = fs.existsSync(path.join(DIR_FRONTEND, 'index.html'));
+const DIR_PUBLICO = HAY_CARPETA_FRONTEND ? DIR_FRONTEND : __dirname;
+if (HAY_CARPETA_FRONTEND) {
+    app.use(express.static(DIR_FRONTEND));
+} else {
+    ['index.html', 'script.js', 'style.css', 'navidad.mp3', 'navidad2.mp3'].forEach((nombre) => {
+        app.get('/' + nombre, (req, res, next) => {
+            const archivo = path.join(__dirname, nombre);
+            return fs.existsSync(archivo) ? res.sendFile(archivo) : next();
+        });
+    });
+}
 
 // =====================================================================
 //  UTILIDADES
 // =====================================================================
+// Hora "de pared" de la academia (por defecto La Paz). Así el servidor funciona igual
+// aunque esté alojado en otro país (Render, Railway, etc. usan hora UTC).
+const ZONA_HORARIA = process.env.APP_TZ || 'America/La_Paz';
 function ahoraLocal() {
-    const d = new Date();
-    const p = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    const partes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: ZONA_HORARIA,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date());
+    const g = (t) => partes.find((p) => p.type === t).value;
+    return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
 }
 
 const fechaValida = (f) => typeof f === 'string' && f.length >= 16 && !isNaN(new Date(f).getTime());
 
 async function registrarMovimiento(tipo, descripcion, detalles = '') {
     try {
-        await supabase.from('historial_movimientos').insert([{
+        // supabase NO lanza excepciones: devuelve { error }, por eso se revisa aquí
+        const { error } = await supabase.from('historial_movimientos').insert([{
             tipo_movimiento: tipo,
             descripcion,
             detalles_usuario: detalles,
             fecha_hora: ahoraLocal()
         }]);
-    } catch (_) {
-        // no interrumpir el flujo principal si falla el log
+        if (error) console.error('No se pudo guardar en el historial:', error.message);
+    } catch (err) {
+        console.error('No se pudo guardar en el historial:', err.message);
     }
+}
+
+// Código de cliente: único para cada usuario y con aspecto aleatorio (ej. AM-7K3Q9X).
+// Se calcula a partir del ID con una operación que nunca repite resultados, así no hace
+// falta guardar nada nuevo en la base de datos y dos usuarios jamás tendrán el mismo código.
+function codigoCliente(id) {
+    const TOTAL = 36 ** 6; // 2,176,782,336 combinaciones
+    const numero = Number(id);
+    if (Number.isInteger(numero) && numero >= 0 && numero < TOTAL) {
+        // BigInt para que la multiplicación sea exacta; 1500450271 no comparte factores con 36, por eso nunca se repite
+        const mezclado = (BigInt(numero) * 1500450271n + 987654321n) % BigInt(TOTAL);
+        return 'AM-' + mezclado.toString(36).toUpperCase().padStart(6, '0');
+    }
+    // Respaldo por si algún día el ID no fuera un número
+    return 'AM-' + crypto.createHash('sha256').update(String(id)).digest('hex').slice(0, 6).toUpperCase();
 }
 
 const usuarioPublico = (u) => ({
@@ -59,8 +105,37 @@ const usuarioPublico = (u) => ({
     email: u.email,
     tipo: u.tipo,
     ci: u.ci,
-    telefono: u.telefono
+    telefono: u.telefono,
+    codigo_cliente: codigoCliente(u.id),
+    foto_url: u.foto_url || null,
+    avatar_id: u.avatar_id || null
 });
+
+// Mismos 10 IDs que ofrece la galería del frontend, para no aceptar cualquier texto.
+const AVATARES_VALIDOS = ['av-1', 'av-2', 'av-3', 'av-4', 'av-5', 'av-6', 'av-7', 'av-8', 'av-9', 'av-10'];
+
+// Sube una imagen en base64 (lo que manda el navegador) a Supabase Storage y devuelve su URL pública
+const BUCKET_FOTOS = process.env.SUPABASE_BUCKET_FOTOS || 'academia-fotos';
+async function subirImagenBase64(dataUrl, carpeta, nombreFijo) {
+    const m = /^data:image\/(png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=]+)$/i.exec(String(dataUrl || ''));
+    if (!m) throw Object.assign(new Error('La imagen no es válida.'), { status: 400 });
+    const ext = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase();
+    const buffer = Buffer.from(m[2], 'base64');
+    if (buffer.length > 6 * 1024 * 1024) {
+        throw Object.assign(new Error('La imagen pesa demasiado (máximo 6 MB).'), { status: 400 });
+    }
+    const ruta = `${carpeta}/${nombreFijo || crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+        .from(BUCKET_FOTOS)
+        .upload(ruta, buffer, { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, upsert: true });
+    if (error) {
+        throw Object.assign(
+            new Error('No se pudo subir la imagen. Revisa que el bucket "' + BUCKET_FOTOS + '" exista y sea público. (' + error.message + ')'),
+            { status: 500 }
+        );
+    }
+    return supabase.storage.from(BUCKET_FOTOS).getPublicUrl(ruta).data.publicUrl;
+}
 
 // Contraseñas cifradas con scrypt (viene incluido en Node, no hay que instalar nada)
 function hashPassword(password) {
@@ -78,32 +153,74 @@ function verificarPassword(password, guardado) {
     return crypto.timingSafeEqual(original, intento);
 }
 
-// Sesiones en memoria
-const sesiones = new Map();
+// Las sesiones viven en la tabla "sesiones" de Supabase (no en memoria), así que
+// si reinicias el servidor, nadie pierde su sesión iniciada.
 const DURACION_SESION = 8 * 60 * 60 * 1000;
 
-function crearSesion(usuario) {
+// Límite de intentos de login (frena el que prueba contraseñas una y otra vez)
+const intentosLogin = new Map();
+const MAX_INTENTOS_LOGIN = 8;
+const VENTANA_LOGIN = 15 * 60 * 1000;
+const claveIntento = (req, email) => `${req.ip}|${email}`;
+function loginBloqueado(clave) {
+    const r = intentosLogin.get(clave);
+    if (!r) return false;
+    if (Date.now() - r.desde > VENTANA_LOGIN) { intentosLogin.delete(clave); return false; }
+    return r.cuenta >= MAX_INTENTOS_LOGIN;
+}
+function registrarFalloLogin(clave) {
+    const r = intentosLogin.get(clave);
+    if (!r || Date.now() - r.desde > VENTANA_LOGIN) intentosLogin.set(clave, { cuenta: 1, desde: Date.now() });
+    else r.cuenta += 1;
+}
+
+// Limpia cada 10 minutos las sesiones vencidas (en Supabase) y los intentos viejos (en memoria)
+setInterval(() => {
+    supabase.from('sesiones').delete().lt('expira', new Date().toISOString())
+        .then(({ error }) => { if (error) console.error('No se pudieron limpiar las sesiones vencidas:', error.message); });
+    const ahora = Date.now();
+    for (const [k, r] of intentosLogin) if (ahora - r.desde > VENTANA_LOGIN) intentosLogin.delete(k);
+}, 10 * 60 * 1000).unref();
+
+function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+// Guarda la sesión en Supabase (solo el "hash" del token, nunca el token en texto plano)
+// y le entrega al navegador el token real, que es el único lugar donde existe completo.
+async function crearSesion(usuario) {
     const token = crypto.randomBytes(32).toString('hex');
-    sesiones.set(token, {
-        id: usuario.id,
-        tipo: usuario.tipo,
+    const { error } = await supabase.from('sesiones').insert([{
+        token_hash: hashToken(token),
+        usuario_id: usuario.id,
         nombre: usuario.nombre,
-        expira: Date.now() + DURACION_SESION
-    });
+        tipo: usuario.tipo,
+        expira: new Date(Date.now() + DURACION_SESION).toISOString()
+    }]);
+    if (error) throw error;
     return token;
 }
 
-function autenticar(req, res, next) {
+async function autenticar(req, res, next) {
     const cabecera = req.headers.authorization || '';
     const token = cabecera.startsWith('Bearer ') ? cabecera.slice(7) : null;
-    const sesion = token ? sesiones.get(token) : null;
-    if (!sesion || sesion.expira < Date.now()) {
-        if (token) sesiones.delete(token);
-        return res.status(401).json({ error: 'Sesión no válida. Inicia sesión de nuevo.' });
+    if (!token) return res.status(401).json({ error: 'Sesión no válida. Inicia sesión de nuevo.' });
+    try {
+        const tokenHash = hashToken(token);
+        const { data: sesion, error } = await supabase.from('sesiones').select('*').eq('token_hash', tokenHash).maybeSingle();
+        if (error) throw error;
+        if (!sesion || new Date(sesion.expira).getTime() < Date.now()) {
+            if (sesion) await supabase.from('sesiones').delete().eq('token_hash', tokenHash);
+            return res.status(401).json({ error: 'Sesión no válida. Inicia sesión de nuevo.' });
+        }
+        req.usuario = { id: sesion.usuario_id, tipo: sesion.tipo, nombre: sesion.nombre };
+        req.token = token;
+        req.tokenHash = tokenHash;
+        next();
+    } catch (err) {
+        console.error('Error al verificar la sesión:', err.message);
+        res.status(500).json({ error: 'Error al verificar la sesión.' });
     }
-    req.usuario = sesion;
-    req.token = token;
-    next();
 }
 
 function soloAdmin(req, res, next) {
@@ -116,7 +233,7 @@ function soloAdmin(req, res, next) {
 const ruta = (fn) => (req, res) => {
     Promise.resolve(fn(req, res)).catch((err) => {
         console.error(err);
-        res.status(500).json({ error: err.message || 'Error interno del servidor.' });
+        res.status(err.status || 500).json({ error: err.message || 'Error interno del servidor.' });
     });
 };
 
@@ -211,7 +328,8 @@ async function asegurarAdminInicial() {
                 nombre: 'Administrador Principal',
                 email: emailAdmin,
                 password: hashPassword(passwordAdmin),
-                tipo: 'admin'
+                tipo: 'admin',
+                email_verificado: true
             }]);
 
         if (errInsert) throw errInsert;
@@ -231,8 +349,11 @@ app.post('/api/registro', ruta(async (req, res) => {
     if (!nombre || !email || !password || !ci || !telefono) {
         return res.status(400).json({ error: 'Completa todos los campos.' });
     }
-    if (password.length < 6) {
-        return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Escribe un correo electrónico válido.' });
+    }
+    if (password.length < 8) {
+        return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
     }
 
     const { data: existente } = await supabase
@@ -252,18 +373,63 @@ app.post('/api/registro', ruta(async (req, res) => {
             password: hashPassword(password),
             tipo: 'cliente',
             ci,
-            telefono
+            telefono,
+            email_verificado: false
         }])
-        .select('id')
+        .select('*')
         .single();
     if (error) throw error;
 
-    res.json({ mensaje: 'Registro exitoso', id: data.id });
+    await enviarVerificacionANuevoUsuario(req, data);
+    res.json({
+        mensaje: 'Registro exitoso. Te enviamos un correo para confirmar tu cuenta antes de iniciar sesión.',
+        id: data.id
+    });
+}));
+
+// Confirma la cuenta cuando el usuario abre el enlace del correo
+app.post('/api/verificar-correo', ruta(async (req, res) => {
+    const token = String(req.body.token || '');
+    if (!token) return res.status(400).json({ error: 'Enlace no válido.' });
+
+    const { data: usuario, error } = await supabase
+        .from('usuarios')
+        .select('id, email_verificado')
+        .eq('verif_token_hash', hashToken(token))
+        .maybeSingle();
+    if (error) throw error;
+    if (!usuario) return res.status(400).json({ error: 'El enlace de verificación no es válido o ya fue usado.' });
+
+    if (!usuario.email_verificado) {
+        await supabase.from('usuarios').update({ email_verificado: true, verif_token_hash: null }).eq('id', usuario.id);
+    }
+    res.json({ mensaje: '¡Correo confirmado! Ya puedes iniciar sesión.' });
+}));
+
+// Por si el correo no llegó o se perdió el enlace
+app.post('/api/reenviar-verificacion', ruta(async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const mensajeGenerico = { mensaje: 'Si ese correo está registrado y aún no se confirmó, te reenviamos el enlace de verificación.' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.json(mensajeGenerico);
+
+    const claveReenvio = claveIntento(req, 'verif:' + email);
+    if (loginBloqueado(claveReenvio)) return res.json(mensajeGenerico);
+    registrarFalloLogin(claveReenvio);
+
+    const { data: usuario } = await supabase.from('usuarios').select('*').eq('email', email).maybeSingle();
+    if (usuario && !usuario.email_verificado) {
+        await enviarVerificacionANuevoUsuario(req, usuario);
+    }
+    res.json(mensajeGenerico);
 }));
 
 app.post('/api/login', ruta(async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
+    const claveLogin = claveIntento(req, email);
+    if (loginBloqueado(claveLogin)) {
+        return res.status(429).json({ error: 'Demasiados intentos fallidos. Espera 15 minutos e inténtalo de nuevo.' });
+    }
 
     const { data: usuario, error } = await supabase
         .from('usuarios')
@@ -273,7 +439,14 @@ app.post('/api/login', ruta(async (req, res) => {
     if (error) throw error;
 
     if (!usuario || !verificarPassword(password, usuario.password)) {
+        registrarFalloLogin(claveLogin);
         return res.status(401).json({ error: 'Credenciales incorrectas.' });
+    }
+    intentosLogin.delete(claveLogin);
+    if (usuario.tipo !== 'admin' && !usuario.email_verificado) {
+        return res.status(403).json({
+            error: 'Primero confirma tu correo electrónico. Revisa tu bandeja (o la carpeta de spam). Si no te llegó, usa "Reenviar verificación".'
+        });
     }
     if (!esHash(usuario.password)) {
         await supabase
@@ -284,14 +457,169 @@ app.post('/api/login', ruta(async (req, res) => {
     res.json({
         mensaje: 'Login exitoso',
         usuario: usuarioPublico(usuario),
-        token: crearSesion(usuario)
+        token: await crearSesion(usuario)
     });
 }));
 
-app.post('/api/logout', autenticar, (req, res) => {
-    sesiones.delete(req.token);
+app.post('/api/logout', autenticar, ruta(async (req, res) => {
+    await supabase.from('sesiones').delete().eq('token_hash', req.tokenHash);
     res.json({ mensaje: 'Sesión cerrada' });
-});
+}));
+
+// Datos actualizados del usuario que tiene la sesión abierta (incluye su código de cliente)
+app.get('/api/mi-perfil', autenticar, ruta(async (req, res) => {
+    const { data: usuario, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('id', req.usuario.id)
+        .maybeSingle();
+    if (error) throw error;
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    res.json(usuarioPublico(usuario));
+}));
+
+// Sube la selfie o la foto elegida y la deja como foto de perfil (reemplaza la anterior)
+app.post('/api/mi-perfil/foto', autenticar, ruta(async (req, res) => {
+    const foto_url = await subirImagenBase64(req.body.imagen, 'perfiles', String(req.usuario.id));
+    const { error } = await supabase.from('usuarios').update({ foto_url }).eq('id', req.usuario.id);
+    if (error) throw error;
+    res.json({ foto_url });
+}));
+
+// Elige uno de los 10 avatares de la galería (y deja de usar la selfie, si tenía una)
+app.post('/api/mi-perfil/avatar', autenticar, ruta(async (req, res) => {
+    const avatar_id = String(req.body.avatar_id || '');
+    if (!AVATARES_VALIDOS.includes(avatar_id)) {
+        return res.status(400).json({ error: 'Avatar no válido.' });
+    }
+    const { data: usuario, error } = await supabase
+        .from('usuarios')
+        .update({ avatar_id, foto_url: null })
+        .eq('id', req.usuario.id)
+        .select('*')
+        .single();
+    if (error) throw error;
+    res.json(usuarioPublico(usuario));
+}));
+
+async function enviarCorreoVerificacion(destino, nombre, enlace) {
+    const transportador = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    });
+    await transportador.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: destino,
+        subject: 'Confirma tu correo - Academia de Música',
+        html: `
+            <p>Hola ${nombre || ''},</p>
+            <p>Gracias por registrarte. Confirma tu correo para poder iniciar sesión:</p>
+            <p><a href="${enlace}">${enlace}</a></p>
+            <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
+        `
+    });
+}
+
+async function enviarVerificacionANuevoUsuario(req, usuario) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await supabase.from('usuarios').update({ verif_token_hash: hashToken(token) }).eq('id', usuario.id);
+    const base = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+    const enlace = `${base}/#verificar=${token}`;
+    if (smtpConfigurado()) {
+        try {
+            await enviarCorreoVerificacion(usuario.email, usuario.nombre, enlace);
+        } catch (err) {
+            console.error('No se pudo enviar el correo de verificación:', err.message);
+        }
+    } else {
+        console.warn('✉️  SMTP no configurado: no se envió el correo. Enlace de verificación (solo visible aquí):', enlace);
+    }
+}
+
+function smtpConfigurado() {
+    return !!(nodemailer && process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+async function enviarCorreoPasswordTemporal(destino, nombre, passwordTemporal) {
+    const transportador = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    });
+    await transportador.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: destino,
+        subject: 'Tu nueva contraseña temporal - Academia de Música',
+        html: `
+            <p>Hola ${nombre || ''},</p>
+            <p>Verificamos tus datos y generamos una contraseña temporal para que puedas entrar de nuevo:</p>
+            <p style="font-size:20px;font-weight:bold;letter-spacing:2px;">${passwordTemporal}</p>
+            <p>Por tu seguridad, te recomendamos cambiarla apenas inicies sesión (menú "Contraseña").</p>
+            <p>Si no fuiste tú quien lo pidió, escríbele al administrador de la academia.</p>
+        `
+    });
+}
+
+// Sin letras ni números que se confunden entre sí (0/O, 1/l/I), para que sea fácil de copiar a mano.
+function generarPasswordTemporal() {
+    const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let p = '';
+    for (const byte of crypto.randomBytes(10)) p += alfabeto[byte % alfabeto.length];
+    return p;
+}
+
+// Recuperar contraseña verificando la IDENTIDAD de la persona (no un enlace de correo):
+// debe escribir el correo, el nombre completo, el CI y el teléfono TAL COMO los registró.
+// Si todo coincide, se genera una contraseña temporal nueva y se muestra en pantalla.
+app.post('/api/recuperar-password', ruta(async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const nombre = String(req.body.nombre || '').trim().toLowerCase();
+    const ci = String(req.body.ci || '').trim();
+    const telefono = String(req.body.telefono || '').trim();
+    const errorGenerico = 'Esos datos no coinciden con ningún usuario registrado. Revísalos e inténtalo de nuevo.';
+
+    if (!email || !nombre || !ci || !telefono) {
+        return res.status(400).json({ error: 'Completa el correo, el nombre, el CI y el teléfono.' });
+    }
+
+    // Mismo límite que el login: evita que alguien pruebe muchas combinaciones de CI/teléfono
+    const claveReset = claveIntento(req, 'reset:' + email);
+    if (loginBloqueado(claveReset)) {
+        return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos e inténtalo de nuevo.' });
+    }
+    registrarFalloLogin(claveReset);
+
+    const { data: usuario, error } = await supabase.from('usuarios').select('*').eq('email', email).maybeSingle();
+    if (error) throw error;
+
+    const coincide = usuario
+        && String(usuario.nombre || '').trim().toLowerCase() === nombre
+        && String(usuario.ci || '').trim() === ci
+        && String(usuario.telefono || '').trim() === telefono;
+    if (!coincide) {
+        return res.status(400).json({ error: errorGenerico });
+    }
+
+    intentosLogin.delete(claveReset);
+    const passwordTemporal = generarPasswordTemporal();
+    await supabase.from('usuarios').update({ password: hashPassword(passwordTemporal) }).eq('id', usuario.id);
+    await supabase.from('sesiones').delete().eq('usuario_id', usuario.id);
+    await registrarMovimiento('USUARIO', `Se generó una contraseña temporal para ${usuario.nombre} (verificación de identidad)`);
+
+    if (smtpConfigurado()) {
+        enviarCorreoPasswordTemporal(usuario.email, usuario.nombre, passwordTemporal).catch((err) => {
+            console.error('No se pudo enviar el correo con la contraseña temporal:', err.message);
+        });
+    }
+
+    res.json({
+        mensaje: 'Verificamos tus datos. Aquí tienes tu contraseña temporal.',
+        password_temporal: passwordTemporal
+    });
+}));
 
 app.post('/api/cambiar-password', autenticar, ruta(async (req, res) => {
     const actual = String(req.body.actual || '');
@@ -318,9 +646,7 @@ app.post('/api/cambiar-password', autenticar, ruta(async (req, res) => {
         .eq('id', usuario.id);
     if (errUpd) throw errUpd;
 
-    for (const [token, sesion] of sesiones) {
-        if (sesion.id === usuario.id && token !== req.token) sesiones.delete(token);
-    }
+    await supabase.from('sesiones').delete().eq('usuario_id', usuario.id).neq('token_hash', req.tokenHash);
     await registrarMovimiento('USUARIO', 'Cambio de contraseña', req.usuario.nombre);
     res.json({ mensaje: 'Contraseña actualizada' });
 }));
@@ -377,7 +703,7 @@ app.post('/api/instrumentos', autenticar, soloAdmin, ruta(async (req, res) => {
     const tipo = String(req.body.tipo || '').trim();
     const numero_serie = String(req.body.numero_serie || '').trim();
     const { estado_fisico } = req.body;
-    const imagen = req.body.imagen || '';
+    let imagen = req.body.imagen || '';
 
     if (!nombre || !tipo || !numero_serie) {
         return res.status(400).json({ error: 'Completa nombre, tipo y número de serie.' });
@@ -388,6 +714,7 @@ app.post('/api/instrumentos', autenticar, soloAdmin, ruta(async (req, res) => {
     if (imagen && !String(imagen).startsWith('data:image/')) {
         return res.status(400).json({ error: 'La imagen no es válida.' });
     }
+    if (imagen) imagen = await subirImagenBase64(imagen, 'instrumentos');
 
     const { data: dup } = await supabase
         .from('instrumentos')
@@ -460,10 +787,11 @@ app.put('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) =>
     const cambios = { nombre, tipo, numero_serie, estado_fisico };
 
     if (req.body.imagen !== undefined) {
-        const imagen = String(req.body.imagen || '');
+        let imagen = String(req.body.imagen || '');
         if (imagen && !imagen.startsWith('data:image/')) {
             return res.status(400).json({ error: 'La imagen no es válida.' });
         }
+        if (imagen) imagen = await subirImagenBase64(imagen, 'instrumentos');
         cambios.imagen = imagen;
     }
 
@@ -482,15 +810,22 @@ app.put('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) =>
 }));
 
 app.delete('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
-    const { count: cPrestamos } = await supabase
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: 'ID de instrumento no válido.' });
+    }
+
+    const { count: cPrestamos, error: errP } = await supabase
         .from('prestamos')
         .select('*', { count: 'exact', head: true })
-        .eq('instrumento_id', req.params.id);
+        .eq('instrumento_id', id);
+    if (errP) throw errP;
 
-    const { count: cReservas } = await supabase
+    const { count: cReservas, error: errR } = await supabase
         .from('reservas_virtuales')
         .select('*', { count: 'exact', head: true })
-        .eq('instrumento_id', req.params.id);
+        .eq('instrumento_id', id);
+    if (errR) throw errR;
 
     if ((cPrestamos || 0) + (cReservas || 0) > 0) {
         return res.status(400).json({
@@ -498,10 +833,10 @@ app.delete('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res)
         });
     }
 
-    const { error } = await supabase.from('instrumentos').delete().eq('id', req.params.id);
+    const { error } = await supabase.from('instrumentos').delete().eq('id', id);
     if (error) throw error;
 
-    await registrarMovimiento('INSTRUMENTO', `Se eliminó el instrumento #${req.params.id}`, req.usuario.nombre);
+    await registrarMovimiento('INSTRUMENTO', `Se eliminó el instrumento #${id}`, req.usuario.nombre);
     res.json({ mensaje: 'Eliminado con éxito' });
 }));
 
@@ -521,7 +856,7 @@ app.post('/api/reservas', autenticar, ruta(async (req, res) => {
     if (new Date(fecha_devolucion_limite) <= new Date(fecha_prestamo)) {
         return res.status(400).json({ error: 'La fecha límite debe ser posterior a la fecha de salida.' });
     }
-    if (new Date(fecha_devolucion_limite) <= new Date()) {
+    if (new Date(fecha_devolucion_limite) <= new Date(ahoraLocal())) {
         return res.status(400).json({ error: 'La fecha límite ya pasó.' });
     }
 
@@ -550,7 +885,7 @@ app.post('/api/reservas', autenticar, ruta(async (req, res) => {
             instrumento_id: instrumento.id,
             usuario_id: req.usuario.id,
             solicitante: req.usuario.nombre,
-            tipo_solicitante: tipo_solicitante || 'Alumno',
+            tipo_solicitante: TIPOS_SOLICITANTE.includes(tipo_solicitante) ? tipo_solicitante : 'Alumno',
             clase_evento,
             fecha_prestamo,
             fecha_devolucion_limite,
@@ -603,86 +938,74 @@ app.get('/api/mis-reservas', autenticar, ruta(async (req, res) => {
 }));
 
 app.post('/api/mis-reservas/:id/cancelar', autenticar, ruta(async (req, res) => {
-  const reservaId = Number(req.params.id);
-  if (!Number.isInteger(reservaId) || reservaId <= 0) {
-    return res.status(400).json({ error: 'ID de reserva no válido.' });
-  }
+    const reservaId = Number(req.params.id);
+    if (!Number.isInteger(reservaId) || reservaId <= 0) {
+        return res.status(400).json({ error: 'ID de reserva no válido.' });
+    }
 
-  const usuarioId = req.usuario?.id ?? req.usuario?.usuario_id;
+    // Solo puede cancelar el dueño de la reserva
+    const { data: reserva, error: errBuscar } = await supabase
+        .from('reservas_virtuales')
+        .select('*')
+        .eq('id', reservaId)
+        .eq('usuario_id', req.usuario.id)
+        .maybeSingle();
+    if (errBuscar) throw errBuscar;
+    if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada.' });
 
-  const { data: reserva, error: errBuscar } = await supabase
-    .from('reservas_virtuales')
-    .select('*')
-    .eq('id', reservaId)
-    .maybeSingle();
+    if (!['Pendiente', 'Aceptada'].includes(reserva.estado_reserva)) {
+        return res.status(400).json({ error: `Esta reserva ya está ${String(reserva.estado_reserva).toLowerCase()}, no se puede cancelar.` });
+    }
 
-  if (errBuscar) throw errBuscar;
+    // Si ya fue aceptada, también se anula SU préstamo (y solo ese)
+    if (reserva.estado_reserva === 'Aceptada') {
+        const ahoraMs = new Date(ahoraLocal()).getTime();
+        if (new Date(reserva.fecha_prestamo).getTime() <= ahoraMs) {
+            return res.status(400).json({
+                error: 'El horario de esta reserva ya comenzó. Comunícate con el administrador para cancelarla.'
+            });
+        }
 
-  if (reserva) {
-    if (usuarioId && reserva.usuario_id && Number(reserva.usuario_id) !== Number(usuarioId)) {
-      return res.status(403).json({ error: 'No tienes permiso para cancelar esta reserva.' });
+        const { data: activos, error: errAct } = await supabase
+            .from('prestamos')
+            .select('id, fecha_prestamo, fecha_devolucion_limite, solicitante')
+            .eq('instrumento_id', reserva.instrumento_id)
+            .eq('es_virtual', 1)
+            .eq('estado', 'Activo');
+        if (errAct) throw errAct;
+
+        const mismoMomento = (a, b) => new Date(a).getTime() === new Date(b).getTime();
+        const idsPrestamo = (activos || [])
+            .filter((p) =>
+                p.solicitante === reserva.solicitante &&
+                mismoMomento(p.fecha_prestamo, reserva.fecha_prestamo) &&
+                mismoMomento(p.fecha_devolucion_limite, reserva.fecha_devolucion_limite)
+            )
+            .map((p) => p.id);
+
+        if (idsPrestamo.length > 0) {
+            const { error: errPrest } = await supabase
+                .from('prestamos')
+                .update({ estado: 'Cancelado' })
+                .in('id', idsPrestamo);
+            if (errPrest) throw errPrest;
+        }
     }
 
     const { data: actualizada, error: errUpdate } = await supabase
-      .from('reservas_virtuales')
-      .update({ estado_reserva: 'Cancelada' })
-      .eq('id', reservaId)
-      .select()
-      .single();
-
+        .from('reservas_virtuales')
+        .update({ estado_reserva: 'Cancelada' })
+        .eq('id', reservaId)
+        .select()
+        .single();
     if (errUpdate) throw errUpdate;
 
-    if (reserva.instrumento_id) {
-      await supabase
-        .from('prestamos')
-        .update({ estado: 'Cancelado' })
-        .eq('instrumento_id', reserva.instrumento_id)
-        .eq('es_virtual', 1)
-        .ilike('estado', 'activo');
-
-      await supabase
-        .from('instrumentos')
-        .update({ disponible: true })
-        .eq('id', reserva.instrumento_id)
-        .neq('estado_fisico', 'En reparación');
-    }
-
-    return res.json({
-      ok: true,
-      reserva: actualizada,
-      estado_label_admin: 'Solicitud / Reserva cancelada'
+    await registrarMovimiento('RESERVA', `Reserva #${reservaId} cancelada por el cliente`, req.usuario.nombre);
+    res.json({
+        ok: true,
+        reserva: actualizada,
+        estado_label_admin: 'Solicitud / Reserva cancelada'
     });
-  }
-
-  // Respaldo: si ya fue aceptada y movida/cerrada en prestamos
-  const { data: prestamo, error: errPrest } = await supabase
-    .from('prestamos')
-    .select('*')
-    .eq('id', reservaId)
-    .maybeSingle();
-
-  if (errPrest) throw errPrest;
-  if (!prestamo) {
-    return res.status(404).json({ error: 'Reserva no encontrada.' });
-  }
-
-  await supabase
-    .from('prestamos')
-    .update({ estado: 'Cancelado' })
-    .eq('id', reservaId);
-
-  if (prestamo.instrumento_id) {
-    await supabase
-      .from('instrumentos')
-      .update({ disponible: true })
-      .eq('id', prestamo.instrumento_id)
-      .neq('estado_fisico', 'En reparación');
-  }
-
-  return res.json({
-    ok: true,
-    estado_label_admin: 'Solicitud / Reserva cancelada'
-  });
 }));
 
 app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, res) => {
@@ -706,6 +1029,12 @@ app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, re
     if (!instrumento) return res.status(400).json({ error: 'El instrumento ya no existe.' });
     if (instrumento.estado_fisico === 'En reparación') {
         return res.status(400).json({ error: 'El instrumento está en reparación.' });
+    }
+
+    if (new Date(reserva.fecha_devolucion_limite) <= new Date(ahoraLocal())) {
+        return res.status(400).json({
+            error: 'La fecha límite de esta reserva ya pasó. Recházala o pídele al cliente que reserve de nuevo.'
+        });
     }
 
     const conflicto = await hayConflicto(
@@ -781,79 +1110,6 @@ app.post('/api/reservas/:id/rechazar', autenticar, soloAdmin, ruta(async (req, r
     res.json({ mensaje: 'Reserva rechazada' });
 }));
 
-app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
-  const prestamoId = Number(req.params.id);
-  if (!Number.isInteger(prestamoId) || prestamoId <= 0) {
-    return res.status(400).json({ error: 'ID de préstamo no válido.' });
-  }
-
-  const { data: prestamo, error: errBuscar } = await supabase
-    .from('prestamos')
-    .select('id, estado, instrumento_id')
-    .eq('id', prestamoId)
-    .maybeSingle();
-
-  if (errBuscar) throw errBuscar;
-  if (!prestamo) {
-    return res.status(404).json({ error: 'Registro de préstamo no encontrado.' });
-  }
-
-  // Si estaba activo y se elimina, liberar el instrumento si no está en reparación
-  if (String(prestamo.estado || '').toLowerCase() === 'activo' && prestamo.instrumento_id) {
-    await supabase
-      .from('instrumentos')
-      .update({ disponible: true })
-      .eq('id', prestamo.instrumento_id)
-      .neq('estado_fisico', 'En reparación');
-  }
-
-  const { error: errDelete } = await supabase
-    .from('prestamos')
-    .delete()
-    .eq('id', prestamoId);
-
-  if (errDelete) throw errDelete;
-
-  return res.json({ ok: true, id: prestamoId });
-}));
-
-app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({ error: 'ID de reserva no válido.' });
-    }
-
-    const { data: reserva, error: errBus } = await supabase
-        .from('reservas_virtuales')
-        .select('id, solicitante, estado_reserva')
-        .eq('id', id)
-        .maybeSingle();
-    if (errBus) throw errBus;
-    if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada.' });
-
-    const { error: errDel } = await supabase
-        .from('reservas_virtuales')
-        .delete()
-        .eq('id', id);
-    if (errDel) {
-        return res.status(400).json({
-            error: `No se pudo eliminar la reserva (${errDel.message || 'revisa dependencias en base de datos'}).`
-        });
-    }
-
-    try {
-        await registrarMovimiento(
-            'RESERVA',
-            `Se eliminó la reserva #${id} (${reserva.estado_reserva}) de ${reserva.solicitante}`,
-            req.usuario.nombre
-        );
-    } catch (errMov) {
-        console.error('Error al registrar movimiento de reserva eliminada:', errMov);
-    }
-
-    res.json({ mensaje: 'Reserva eliminada con éxito' });
-}));
-
 // =====================================================================
 //  PRÉSTAMOS Y DEVOLUCIONES
 // =====================================================================
@@ -879,6 +1135,7 @@ app.get('/api/prestamos', autenticar, soloAdmin, ruta(async (req, res) => {
     res.json(formateado);
 }));
 
+// Anula un préstamo activo o borra del registro uno ya devuelto/cancelado
 app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -887,30 +1144,23 @@ app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) =>
 
     const { data: prestamo, error: errBus } = await supabase
         .from('prestamos')
-        .select('id, estado, solicitante, instrumento_id')
+        .select('id, estado, solicitante')
         .eq('id', id)
         .maybeSingle();
     if (errBus) throw errBus;
-    if (!prestamo) return res.status(404).json({ error: 'Préstamo no encontrado.' });
+    if (!prestamo) return res.status(404).json({ error: 'Registro de préstamo no encontrado.' });
 
-    if (prestamo.estado !== 'Activo') {
-        return res.status(400).json({
-            error: 'Solo se pueden anular o eliminar préstamos que estén Activos (los devueltos se conservan en el historial).'
-        });
-    }
-
-    const { error: errDel } = await supabase
-        .from('prestamos')
-        .delete()
-        .eq('id', id);
+    const { error: errDel } = await supabase.from('prestamos').delete().eq('id', id);
     if (errDel) throw errDel;
 
     await registrarMovimiento(
         'PRÉSTAMO',
-        `Se anuló/eliminó el préstamo activo #${id} de ${prestamo.solicitante}`,
+        prestamo.estado === 'Activo'
+            ? `Se anuló/eliminó el préstamo activo #${id} de ${prestamo.solicitante}`
+            : `Se borró el registro del préstamo #${id} (${prestamo.estado}) de ${prestamo.solicitante}`,
         req.usuario.nombre
     );
-    res.json({ mensaje: 'Préstamo anulado y eliminado con éxito' });
+    res.json({ ok: true, id, mensaje: 'Préstamo eliminado con éxito' });
 }));
 
 app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => {
@@ -927,11 +1177,12 @@ app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => 
     if (errBus) throw errBus;
     if (!reserva) return res.status(404).json({ error: 'Reserva no encontrada.' });
 
-    const { error: errDel } = await supabase
-        .from('reservas_virtuales')
-        .delete()
-        .eq('id', id);
-    if (errDel) throw errDel;
+    const { error: errDel } = await supabase.from('reservas_virtuales').delete().eq('id', id);
+    if (errDel) {
+        return res.status(400).json({
+            error: `No se pudo eliminar la reserva (${errDel.message || 'revisa dependencias en base de datos'}).`
+        });
+    }
 
     await registrarMovimiento(
         'RESERVA',
@@ -1076,46 +1327,6 @@ app.put('/api/prestamos/:id/devolver', autenticar, soloAdmin, ruta(async (req, r
     res.json({ mensaje: 'Devolución registrada', multa: m.total, detalle: m });
 }));
 
-app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
-  const prestamoId = Number(req.params.id);
-  if (!Number.isInteger(prestamoId) || prestamoId <= 0) {
-    return res.status(400).json({ error: 'ID de préstamo no válido.' });
-  }
-
-  const { data: prestamo, error: errBuscar } = await supabase
-    .from('prestamos')
-    .select('id, estado, fecha_devolucion_real')
-    .eq('id', prestamoId)
-    .maybeSingle();
-
-  if (errBuscar) throw errBuscar;
-  if (!prestamo) {
-    return res.status(404).json({ error: 'Registro de préstamo no encontrado.' });
-  }
-
-  const estadoLower = String(prestamo.estado || '').toLowerCase();
-  const yaFinalizado =
-    Boolean(prestamo.fecha_devolucion_real) ||
-    estadoLower.includes('devuelto') ||
-    estadoLower.includes('complet') ||
-    estadoLower.includes('cancel');
-
-  if (!yaFinalizado) {
-    return res.status(400).json({
-      error: 'Solo se pueden borrar registros ya devueltos/completados o cancelados.'
-    });
-  }
-
-  const { error: errDelete } = await supabase
-    .from('prestamos')
-    .delete()
-    .eq('id', prestamoId);
-
-  if (errDelete) throw errDelete;
-
-  return res.json({ ok: true, id: prestamoId });
-}));
-
 // =====================================================================
 //  QR DE PAGOS
 // =====================================================================
@@ -1195,7 +1406,7 @@ app.get('/api/estado', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+    res.sendFile(path.join(DIR_PUBLICO, 'index.html'));
 });
 
 asegurarAdminInicial()

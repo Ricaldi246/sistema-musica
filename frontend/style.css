@@ -1085,6 +1085,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .btn-dark { background: #34495e; }
 .btn-gray { background: #7f8c8d; }
 .btn-info { background: #3498db; }
+.btn-warning { background: #f39c12; }
 .btn-light { background: #fff; color: #333; }
 .btn-nav { margin-top: 15px; margin-bottom: 15px; background: #2c3e50; }
 
@@ -1871,4 +1872,28 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .decoracion.mes-10 ~ #vista-catalogo .hero-texto p,
 .decoracion.mes-11 ~ #vista-catalogo .hero-texto p {
   color: #f8fafc;
+}
+
+/* ===== Avatar con botón de cámara, selfie y credencial ===== */
+.perfil-avatar-wrap { position: relative; width: 84px; height: 84px; flex-shrink: 0; }
+.perfil-avatar-wrap .perfil-avatar-grande { display: block; }
+.btn-camara {
+  position: absolute; right: -8px; bottom: -8px;
+  width: 36px; height: 36px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 2px solid #fff;
+  background: #6c5ce7; color: #fff; font-size: 17px; line-height: 1;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.btn-camara:hover { transform: scale(1.12); background: #5a4bd1; }
+.camara-caja {
+  position: relative; width: 100%; max-width: 320px; aspect-ratio: 1 / 1;
+  margin: 0 auto 12px; border-radius: 50%; overflow: hidden;
+  background: #111; border: 4px solid #6c5ce7;
+}
+.camara-caja video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.credencial-vista {
+  display: block; width: 100%; max-width: 300px; margin: 0 auto 14px;
+  border-radius: 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
