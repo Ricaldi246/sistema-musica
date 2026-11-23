@@ -423,6 +423,67 @@ app.post('/api/reenviar-verificacion', ruta(async (req, res) => {
     res.json(mensajeGenerico);
 }));
 
+// Procesa los botones "Sí, soy yo / Aceptar" y "No, no soy yo / Rechazar" del correo
+app.get('/api/autorizar-login', ruta(async (req, res) => {
+    const token = String(req.query.token || '').trim();
+    const accion = String(req.query.accion || '').trim().toLowerCase();
+
+    if (!token || !['aceptar', 'rechazar'].includes(accion)) {
+        return res.status(400).send(`
+            <html><body style="font-family:Arial,sans-serif;text-align:center;padding:40px;">
+                <h2>Enlace no válido</h2>
+                <p>El enlace de autorización está incompleto o no es correcto.</p>
+            </body></html>
+        `);
+    }
+
+    const { data: usuario, error } = await supabase
+        .from('usuarios')
+        .select('id, nombre, email, login_token_hash, email_verificado')
+        .eq('login_token_hash', hashToken(token))
+        .maybeSingle();
+
+    if (error) throw error;
+
+    if (!usuario) {
+        return res.status(400).send(`
+            <html><body style="font-family:Arial,sans-serif;text-align:center;padding:40px;">
+                <h2>Solicitud vencida o ya utilizada</h2>
+                <p>Este enlace ya no es válido. Vuelve a intentar iniciar sesión para generar uno nuevo.</p>
+            </body></html>
+        `);
+    }
+
+    const nuevoEstado = accion === 'aceptar' ? 'aprobado' : 'rechazado';
+    const updates = { login_estado: nuevoEstado };
+    if (accion === 'aceptar') {
+        updates.email_verificado = true;
+        updates.verif_token_hash = null;
+    }
+
+    const { error: errUpd } = await supabase
+        .from('usuarios')
+        .update(updates)
+        .eq('id', usuario.id);
+    if (errUpd) throw errUpd;
+
+    if (accion === 'aceptar') {
+        return res.send(`
+            <html><body style="font-family:Arial,sans-serif;text-align:center;padding:40px;">
+                <h2 style="color:#16a34a;">Inicio de sesión autorizado</h2>
+                <p>Listo, ${usuario.nombre || usuario.email}. Ya puedes volver a la pantalla de inicio de sesión para entrar al sistema.</p>
+            </body></html>
+        `);
+    }
+
+    return res.send(`
+        <html><body style="font-family:Arial,sans-serif;text-align:center;padding:40px;">
+            <h2 style="color:#dc2626;">Acceso rechazado</h2>
+            <p>Has marcado que no reconoces este intento. El acceso quedó bloqueado.</p>
+        </body></html>
+    `);
+}));
+
 app.post('/api/login', ruta(async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
