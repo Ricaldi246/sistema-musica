@@ -504,21 +504,89 @@ app.post('/api/login', ruta(async (req, res) => {
         return res.status(401).json({ error: 'Credenciales incorrectas.' });
     }
     intentosLogin.delete(claveLogin);
-    if (usuario.tipo !== 'admin' && !usuario.email_verificado) {
-        return res.status(403).json({
-            error: 'Primero confirma tu correo electrónico. Revisa tu bandeja (o la carpeta de spam). Si no te llegó, usa "Reenviar verificación".'
-        });
-    }
+
     if (!esHash(usuario.password)) {
         await supabase
             .from('usuarios')
             .update({ password: hashPassword(password) })
             .eq('id', usuario.id);
     }
+
+    if (usuario.tipo !== 'admin' && !usuario.email_verificado) {
+        await enviarVerificacionANuevoUsuario(req, usuario);
+        return res.status(202).json({
+            requiere_autorizacion: true,
+            estado_autorizacion: 'pendiente',
+            mensaje: 'Te enviamos un correo con dos opciones. Pulsa "Sí, soy yo / Aceptar" para continuar.'
+        });
+    }
+
+    // Limpia cualquier estado previo para evitar bucles en futuros inicios de sesión
+    await supabase
+        .from('usuarios')
+        .update({ login_estado: null, login_token_hash: null })
+        .eq('id', usuario.id);
+
     res.json({
-        mensaje: 'Login exitoso',
+        mensaje: 'Inicio de sesión autorizado',
         usuario: usuarioPublico(usuario),
         token: await crearSesion(usuario)
+    });
+}));
+
+// Consulta el estado ("pendiente", "aprobado" o "rechazado") mientras el usuario está en el login
+app.post('/api/estado-autorizacion', ruta(async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Faltan credenciales.' });
+    }
+
+    const { data: usuario, error } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+    if (error) throw error;
+
+    if (!usuario || !verificarPassword(password, usuario.password)) {
+        return res.status(401).json({ error: 'Credenciales incorrectas.' });
+    }
+
+    if (usuario.login_estado === 'rechazado') {
+        await supabase
+            .from('usuarios')
+            .update({ login_estado: null, login_token_hash: null })
+            .eq('id', usuario.id);
+        return res.json({
+            estado_autorizacion: 'rechazado',
+            mensaje: 'Inicio de sesión rechazado.'
+        });
+    }
+
+    if (usuario.login_estado === 'aprobado' || usuario.email_verificado) {
+        await supabase
+            .from('usuarios')
+            .update({
+                email_verificado: true,
+                verif_token_hash: null,
+                login_estado: null,
+                login_token_hash: null
+            })
+            .eq('id', usuario.id);
+
+        return res.json({
+            estado_autorizacion: 'aprobado',
+            mensaje: 'Inicio de sesión autorizado',
+            usuario: usuarioPublico(usuario),
+            token: await crearSesion(usuario)
+        });
+    }
+
+    return res.json({
+        estado_autorizacion: 'pendiente',
+        mensaje: 'Esperando que elijas "Sí, soy yo / Aceptar" en tu correo...'
     });
 }));
 

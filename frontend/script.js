@@ -784,24 +784,104 @@ const acciones = `
 // =====================================================================
 //  LOGIN, REGISTRO Y SESIÓN
 // =====================================================================
+let intervaloAutorizacionLogin = null;
+
+function limpiarEsperaAutorizacionLogin() {
+    if (intervaloAutorizacionLogin) {
+        clearInterval(intervaloAutorizacionLogin);
+        intervaloAutorizacionLogin = null;
+    }
+}
+
+function setMensajeAutorizacionLogin(texto, color = '#fbbf24') {
+    const el = $('login-estado-autorizacion');
+    if (!el) return;
+    el.textContent = texto || '';
+    el.style.color = color;
+}
+
+async function completarAccesoTrasLogin(data) {
+    limpiarEsperaAutorizacionLogin();
+    setMensajeAutorizacionLogin('Inicio de sesión autorizado', '#22c55e');
+    guardarSesion({ token: data.token, usuario: data.usuario });
+    $('login-password').value = '';
+    ocultarPasswords($('form-login'));
+    toast('Inicio de sesión autorizado');
+
+    await new Promise((r) => setTimeout(r, 450));
+    setMensajeAutorizacionLogin('');
+
+    if (data.usuario.tipo === 'admin') {
+        mostrarPaginaAdmin();
+    } else {
+        verificarSesionUI();
+        volverAlCatalogo();
+    }
+}
+
 async function ejecutarLogin(e) {
     e.preventDefault();
     if (!isOn) { performSimulatedPull(); return; }
-    const email = $('login-email').value;
+
+    limpiarEsperaAutorizacionLogin();
+    setMensajeAutorizacionLogin('');
+
+    const email = ($('login-email').value || '').trim();
     const password = $('login-password').value;
 
     try {
-        const data = await api('/api/login', { method: 'POST', body: { email, password } });
-        guardarSesion({ token: data.token, usuario: data.usuario });
-        $('login-password').value = '';
-        ocultarPasswords($('form-login'));
-        if (data.usuario.tipo === 'admin') {
-            mostrarPaginaAdmin();
-        } else {
-            verificarSesionUI();
-            volverAlCatalogo();
+        const resp = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+        const data = await resp.json().catch(() => ({}));
+
+        if (!resp.ok) {
+            throw new Error(data.error || 'Error al iniciar sesión.');
         }
+
+        if (data.requiere_autorizacion && data.estado_autorizacion === 'pendiente') {
+            setMensajeAutorizacionLogin(
+                data.mensaje || 'Revisa tu correo y pulsa "Sí, soy yo / Aceptar".',
+                '#fbbf24'
+            );
+            toast('Revisa tu correo y pulsa "Sí, soy yo / Aceptar".');
+
+            let intentos = 0;
+            intervaloAutorizacionLogin = setInterval(async () => {
+                intentos += 1;
+                if (intentos > 72) {
+                    limpiarEsperaAutorizacionLogin();
+                    setMensajeAutorizacionLogin('Se agotó el tiempo de espera. Vuelve a intentar iniciar sesión.', '#f87171');
+                    return;
+                }
+                try {
+                    const rEstado = await fetch('/api/estado-autorizacion', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password })
+                    });
+                    const dEstado = await rEstado.json().catch(() => ({}));
+                    if (!rEstado.ok) return;
+
+                    if (dEstado.estado_autorizacion === 'aprobado' && dEstado.token && dEstado.usuario) {
+                        await completarAccesoTrasLogin(dEstado);
+                    } else if (dEstado.estado_autorizacion === 'rechazado') {
+                        limpiarEsperaAutorizacionLogin();
+                        setMensajeAutorizacionLogin('Inicio de sesión rechazado.', '#f87171');
+                        toast('El intento de inicio de sesión fue rechazado.', 'error');
+                    }
+                } catch (_) {
+                    // Si hay un microcorte de red, reintenta en el siguiente ciclo
+                }
+            }, 2500);
+            return;
+        }
+
+        await completarAccesoTrasLogin(data);
     } catch (err) {
+        setMensajeAutorizacionLogin(err.message, '#f87171');
         toast(err.message, 'error');
     }
 }
