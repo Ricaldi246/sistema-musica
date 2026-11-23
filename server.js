@@ -502,7 +502,46 @@ app.post('/api/mi-perfil/avatar', autenticar, ruta(async (req, res) => {
     res.json(usuarioPublico(usuario));
 }));
 
-async function enviarCorreoVerificacion(destino, nombre, enlace) {
+async function enviarCorreoVerificacion(destino, nombre, enlaceAceptar, enlaceRechazar) {
+    const remitente = process.env.SMTP_FROM || process.env.SMTP_USER;
+    const asunto = 'Autorización de acceso - Academia de Música';
+    const html = `
+        <p>Hola ${nombre || ''},</p>
+        <p>Se detectó una solicitud de acceso o verificación para tu cuenta. Elige una opción:</p>
+        <p>
+            <a href="${enlaceAceptar}" style="display:inline-block;padding:10px 18px;background:#16a34a;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;margin-right:10px;">
+                Sí, soy yo / Aceptar
+            </a>
+            <a href="${enlaceRechazar}" style="display:inline-block;padding:10px 18px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;">
+                No, no soy yo / Rechazar
+            </a>
+        </p>
+        <p>Si no reconoces esta actividad, pulsa "No, no soy yo / Rechazar".</p>
+    `;
+
+    // Usa la API HTTPS de Brevo si está configurada (evita bloqueos de puertos SMTP en Render)
+    if (process.env.BREVO_API_KEY) {
+        const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': process.env.BREVO_API_KEY,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: { email: remitente, name: 'Academia de Música' },
+                to: [{ email: destino, name: nombre || destino }],
+                subject: asunto,
+                htmlContent: html
+            })
+        });
+        if (!resp.ok) {
+            const detalle = await resp.text();
+            throw new Error(`Brevo API error (${resp.status}): ${detalle}`);
+        }
+        return;
+    }
+
     const transportador = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: Number(process.env.SMTP_PORT || 587),
@@ -510,31 +549,39 @@ async function enviarCorreoVerificacion(destino, nombre, enlace) {
         auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
     });
     await transportador.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        from: remitente,
         to: destino,
-        subject: 'Confirma tu correo - Academia de Música',
-        html: `
-            <p>Hola ${nombre || ''},</p>
-            <p>Gracias por registrarte. Confirma tu correo para poder iniciar sesión:</p>
-            <p><a href="${enlace}">${enlace}</a></p>
-            <p>Si no creaste esta cuenta, puedes ignorar este correo.</p>
-        `
+        subject: asunto,
+        html
     });
 }
 
 async function enviarVerificacionANuevoUsuario(req, usuario) {
     const token = crypto.randomBytes(32).toString('hex');
-    await supabase.from('usuarios').update({ verif_token_hash: hashToken(token) }).eq('id', usuario.id);
-    const base = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
-    const enlace = `${base}/#verificar=${token}`;
-    if (smtpConfigurado()) {
+    const tokenHash = hashToken(token);
+
+    const { error } = await supabase
+        .from('usuarios')
+        .update({
+            verif_token_hash: tokenHash,
+            login_token_hash: tokenHash,
+            login_estado: 'pendiente'
+        })
+        .eq('id', usuario.id);
+    if (error) throw error;
+
+    const base = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+    const enlaceAceptar = `${base}/api/autorizar-login?token=${encodeURIComponent(token)}&accion=aceptar`;
+    const enlaceRechazar = `${base}/api/autorizar-login?token=${encodeURIComponent(token)}&accion=rechazar`;
+
+    if (process.env.BREVO_API_KEY || smtpConfigurado()) {
         try {
-            await enviarCorreoVerificacion(usuario.email, usuario.nombre, enlace);
+            await enviarCorreoVerificacion(usuario.email, usuario.nombre, enlaceAceptar, enlaceRechazar);
         } catch (err) {
             console.error('No se pudo enviar el correo de verificación:', err.message);
         }
     } else {
-        console.warn('✉️  SMTP no configurado: no se envió el correo. Enlace de verificación (solo visible aquí):', enlace);
+        console.warn('✉️  Correo no configurado. Enlaces generados:', { enlaceAceptar, enlaceRechazar });
     }
 }
 
