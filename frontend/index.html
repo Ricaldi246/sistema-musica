@@ -3,35 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- TÍTULO que aparece en la pestaña del navegador. Cambia el texto para renombrar la página. -->
     <title>Sistema de Gestión y Catálogo - Academia de Música</title>
+    <!-- Fuentes de Google: estas dos líneas preparan la conexión para que la tipografía cargue más rápido. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Descarga la tipografía "Plus Jakarta Sans". Para cambiar de letra, cambia el nombre en esta dirección
+         y también el font-family en style.css. -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Conecta este HTML con style.css: ahí están TODOS los colores, tamaños, posiciones y animaciones. -->
     <link rel="stylesheet" href="style.css">
 </head>
+<!-- data-on="false" significa lámpara APAGADA. Cuando la lámpara se enciende, script.js lo cambia a "true"
+     y el CSS usa ese valor para mostrar la luz, el haz y la tarjeta de login. No lo cambies a mano. -->
 <body data-on="false">
 
     <!-- ===================== LOGIN (LÁMPARA) ===================== -->
+    <!-- VISTA 1: PANTALLA DE LOGIN (lámpara + formulario). Se muestra/oculta con la función mostrarVista() de script.js. -->
     <div id="vista-login">
+        <!-- Resplandor de luz de fondo de la pared. Su color y fuerza se cambian en style.css (.ambient-glow). -->
         <div class="ambient-glow"></div>
+        <!-- Lienzo donde script.js dibuja las partículas de polvo / luciérnagas que flotan con la luz. -->
         <canvas id="dustCanvas"></canvas>
 
         <!-- Controls -->
+        <!-- PANEL SUPERIOR DERECHO del login: paleta de colores + botón de sonido.
+             Su posición (arriba/derecha) se cambia en style.css (.quick-controls, propiedades top y right). -->
         <div class="quick-controls">
+            <!-- Paleta de colores de la lámpara. Cada botón tiene data-color (nombre del tema) y –dot-color (color del circulito).
+                 Para AGREGAR un color nuevo: 1) copia un botón, 2) crea un bloque [data-color="nombre"] en style.css,
+                 3) agrega el color de partículas en particleThemes en script.js. -->
             <div class="color-palette" id="colorPalette" title="Color de la lámpara">
+                <!-- Color AMBAR (el que está activo al abrir la página). Cambia style="–dot-color: ..." para el color del circulito. -->
                 <button class="color-dot-btn active" data-color="amber" style="--dot-color: #ffab3d;" aria-label="Amber Light" title="Amber (Warm)"></button>
+                <!-- Color CIAN. -->
                 <button class="color-dot-btn" data-color="cyan" style="--dot-color: #00f0ff;" aria-label="Cyan Light" title="Cyan (Cyber)"></button>
+                <!-- Color ROSA. -->
                 <button class="color-dot-btn" data-color="rose" style="--dot-color: #ff3385;" aria-label="Rose Light" title="Rose (Sunset)"></button>
+                <!-- Color MENTA (verde). -->
                 <button class="color-dot-btn" data-color="mint" style="--dot-color: #00e676;" aria-label="Mint Light" title="Mint (Emerald)"></button>
+                <!-- Color LUZ DE LUNA (blanco azulado). -->
                 <button class="color-dot-btn" data-color="moonlight" style="--dot-color: #d8e5ff;" aria-label="Moonlight" title="Moonlight (Cool White)"></button>
             </div>
 
+            <!-- BOTÓN DE SONIDO del login: silencia / activa la música de la lámpara.
+                 Los dos dibujos de abajo son el icono con sonido y el icono silenciado; script.js alterna cuál se ve. -->
             <button class="sound-toggle" id="soundToggle" title="Sonido" aria-label="Toggle Sound">
                 <svg class="sound-icon sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                     <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
                 </svg>
+                <!-- Icono de sonido APAGADO (empieza oculto con la clase "hidden"). -->
                 <svg class="sound-icon sound-off hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
                     <line x1="23" y1="9" x2="17" y2="15"></line>
@@ -40,11 +63,19 @@
             </button>
         </div>
 
+        <!-- CONTENEDOR PRINCIPAL del login: a la izquierda la lámpara y a la derecha la tarjeta de acceso.
+             Tamaño y separación en style.css (.scene-container). -->
         <main class="scene-container">
             <!-- Lamp -->
+            <!-- Zona donde está la lámpara. Su ancho y alineación están en style.css (.lamp-stage). -->
             <div class="lamp-stage">
+                <!-- Caja que contiene el dibujo de la lámpara. Su tamaño (400x520) se cambia en style.css (.lamp-wrapper). -->
                 <div class="lamp-wrapper">
+                    <!-- LA LÁMPARA: es un dibujo vectorial (SVG). Cada grupo <g> de abajo es una pieza (base, brazos, pantalla, bombillo, cordón).
+                         viewBox="0 0 400 500" es el tamaño interno del dibujo; las coordenadas (x, y) dentro del SVG usan esa medida. -->
                     <svg class="lamp-svg" viewBox="0 0 400 500" xmlns="http://www.w3.org/2000/svg">
+                        <!-- DEFINICIONES: degradados de color y filtros (metal, latón/dorado, pantalla, luz). Aquí se cambian los colores de las piezas de la lámpara
+                             (stop-color). Los que usan var(–lamp-glow) o var(–lamp-accent) cambian solos con la paleta de colores. -->
                         <defs>
                             <linearGradient id="metalArm" x1="0" y1="0" x2="1" y2="0">
                                 <stop offset="0%" stop-color="#3e434a" />
@@ -104,10 +135,14 @@
                             </filter>
                         </defs>
 
+                        <!-- Sombra de la lámpara sobre la mesa. -->
                         <ellipse class="desk-shadow" cx="190" cy="460" rx="90" ry="16" fill="rgba(0, 0, 0, 0.55)" />
+                        <!-- HAZ DE LUZ que sale de la pantalla. El atributo points="..." del polígono define su forma y hasta dónde llega;
+                             su color viene de las variables –beam-* en style.css. -->
                         <g class="light-beam-group">
                             <polygon class="svg-light-beam" points="182,185 308,225 820,480 340,510" fill="url(#volumetricBeam)" filter="url(#beamSoftFilter)" />
                         </g>
+                        <!-- BASE de la lámpara (óvalos y tornillo dorado). -->
                         <g class="lamp-base-group">
                             <ellipse cx="190" cy="445" rx="72" ry="14" fill="#15171a" />
                             <ellipse cx="190" cy="443" rx="70" ry="12" fill="url(#metalArm)" />
@@ -117,48 +152,61 @@
                             <circle cx="190" cy="439" r="7" fill="#15171a" />
                             <circle cx="190" cy="439" r="3.2" fill="#747b86" />
                         </g>
+                        <!-- BRAZO INFERIOR de la lámpara. -->
                         <g class="lamp-arm-lower">
                             <line x1="186" y1="439" x2="156" y2="295" stroke="url(#metalArm)" stroke-width="4.5" stroke-linecap="round" />
                             <line x1="194" y1="439" x2="164" y2="295" stroke="url(#metalArm)" stroke-width="4.5" stroke-linecap="round" />
                             <path d="M 188 420 Q 175 360 163 305" stroke="#606670" stroke-width="2" stroke-dasharray="3,3" fill="none" opacity="0.6" />
                         </g>
+                        <!-- CODO / articulación dorada entre los dos brazos. -->
                         <g class="lamp-elbow-joint">
                             <circle cx="160" cy="295" r="13" fill="url(#brassJoint)" />
                             <circle cx="160" cy="295" r="6" fill="#1c1f24" />
                             <circle cx="160" cy="295" r="3.3" fill="#858b94" />
                             <line x1="155" y1="295" x2="165" y2="295" stroke="url(#brassJoint)" stroke-width="2" />
                         </g>
+                        <!-- BRAZO SUPERIOR de la lámpara. -->
                         <g class="lamp-arm-upper">
                             <line x1="160" y1="295" x2="215" y2="175" stroke="url(#metalArm)" stroke-width="5" stroke-linecap="round" />
                             <path d="M 190 439 Q 168 360 160 295 Q 190 230 215 175" stroke="#101114" stroke-width="3" fill="none" stroke-linecap="round" />
                         </g>
+                        <!-- CUELLO: unión del brazo con la pantalla. -->
                         <g class="lamp-neck">
                             <circle cx="215" cy="175" r="11" fill="url(#brassJoint)" />
                             <rect x="209" y="162" width="16" height="15" rx="3" fill="url(#metalArm)" transform="rotate(25, 217, 169)" />
                         </g>
+                        <!-- PANTALLA completa: cuerpo, reflector (apagado y encendido), borde dorado y bombillo.
+                             script.js la mueve ligeramente al encender/apagar. -->
                         <g class="lamp-shade-assembly" id="shadeAssembly">
                             <path class="lamp-shade-body" d="M 182.3 184.6 C 188 135, 220 112, 248 115 C 275 118, 298 155, 307.7 225.4 A 66 22 18 0 1 182.3 184.6 Z" fill="url(#shadeExterior)" stroke="#16181b" stroke-width="1.8" />
                             <path class="shade-enamel-highlight" d="M 187 181 C 193 139, 221 119, 247 120 C 267 122, 286 144, 297 178 C 271 163, 224 153, 187 181 Z" fill="url(#shadeHighlight)" />
                             <path d="M 204 148 C 216 125, 235 119, 251 122" fill="none" stroke="#aeb5c2" stroke-opacity=".17" stroke-width="1.2" stroke-linecap="round" />
+                            <!-- Interior de la pantalla cuando está APAGADA (gris oscuro). -->
                             <ellipse class="shade-reflector-off" cx="245" cy="205" rx="66" ry="22" transform="rotate(18, 245, 205)" fill="url(#reflectorOff)" />
+                            <!-- Interior de la pantalla cuando está ENCENDIDA (se ve brillante; su opacidad se controla desde el CSS/JS). -->
                             <ellipse class="shade-reflector-on" cx="245" cy="205" rx="66" ry="22" transform="rotate(18, 245, 205)" fill="url(#reflectorOn)" />
                             <ellipse class="reflector-detail" cx="245" cy="205" rx="49" ry="14" transform="rotate(18, 245, 205)" fill="none" stroke="#fff3ce" stroke-opacity=".16" stroke-width=".8" />
                             <ellipse cx="245" cy="205" rx="66" ry="22" transform="rotate(18, 245, 205)" fill="none" stroke="rgba(255, 213, 132, 0.25)" stroke-width="1" />
                             <path class="shade-rim-trim" d="M 182.3 184.6 A 66 22 18 0 0 307.7 225.4" stroke="url(#shadeRim)" stroke-width="4" fill="none" stroke-linecap="round" />
+                            <!-- BOMBILLO: vidrio, filamento y resplandor (bulb-glow-core aparece al encender). -->
                             <g class="bulb-unit" id="bulbUnit">
                                 <ellipse class="bulb-glass" cx="245" cy="195" rx="14" ry="17" transform="rotate(18, 245, 195)" fill="rgba(255, 255, 255, 0.08)" stroke="rgba(255, 255, 255, 0.25)" stroke-width="1" />
                                 <path d="M 239 190 Q 242 181 247 183" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.2" stroke-linecap="round" />
                                 <path class="bulb-filament" d="M 241 189 Q 245 183 249 189" stroke="#555" stroke-width="1.8" fill="none" />
                                 <circle class="bulb-glow-core" cx="245" cy="188" r="11" fill="var(--lamp-glow, #ffe194)" filter="url(#bulbGlowFilter)" opacity="0" />
                             </g>
+                            <!-- Ojal dorado de donde sale el cordón. -->
                             <g class="cord-socket-grommet">
                                 <rect x="242" y="206" width="6" height="6" rx="1.5" fill="url(#brassJoint)" stroke="#68420e" stroke-width="0.8" />
                                 <circle cx="245" cy="212" r="3" fill="#ffe299" stroke="#7a5513" stroke-width="0.8" />
                                 <circle cx="245" cy="212" r="1.3" fill="#181105" />
                             </g>
                         </g>
+                        <!-- CORDÓN ELÁSTICO + BOLITA que se jala para encender/apagar. El arrastre lo programa script.js (Draggable);
+                             las constantes ANCHOR_X/Y, REST_X/Y, MAX_STRETCH y TRIGGER_PULL de ese archivo controlan posición y fuerza del tirón. -->
                         <g class="pull-cord-system">
                             <path class="elastic-cord-path" id="elasticCord" d="M 245 212 L 245 300" stroke="#e8bb54" stroke-width="2.6" stroke-linecap="round" />
+                            <!-- La bolita dorada que se arrastra con el mouse o el dedo. cordHit (círculo transparente r=32) es el área donde se puede agarrar. -->
                             <g class="cord-bead-group" id="cordBead" cursor="grab">
                                 <circle class="bead-aura" cx="0" cy="0" r="16" fill="var(--lamp-accent)" opacity="0" />
                                 <path class="bead-shape" d="M -12 -20 L 12 -20 L 18 16 C 18 24, -18 24, -18 16 Z" fill="url(#brassJoint)" stroke="#7a5513" stroke-width="0.8" />
@@ -167,6 +215,7 @@
                             </g>
                         </g>
                     </svg>
+                    <!-- Globito de ayuda sobre la lámpara. Cambia el texto del <span> para otro mensaje. -->
                     <div class="cord-tooltip" id="cordTooltip">
                         <span>Jala la cuerda para encender</span>
                         <div class="tooltip-arrow"></div>
@@ -175,18 +224,26 @@
             </div>
 
             <!-- Formulario de acceso -->
+            <!-- Zona derecha del login donde aparece la tarjeta de acceso. -->
             <div class="form-stage">
+                <!-- TARJETA DE LOGIN: permanece oculta hasta que se enciende la lámpara. Estilo (tamaño, borde, vidrio) en style.css (.login-card). -->
                 <div class="login-card" id="loginCard">
+                    <!-- Título y subtítulo de la tarjeta. Cambia los textos de <h1> y <p> para renombrar la academia. -->
                     <div class="card-header">
                         <h1 class="card-title">Academia de Música</h1>
                         <p class="card-subtitle">Ingresa tus credenciales para acceder</p>
                     </div>
+                    <!-- PESTAÑAS "Iniciar sesión" / "Registrarse". "Registrarse" abre la ventana modal-registro (ver script.js).
+                         tab-slider es la barrita que se desliza debajo. -->
                     <div class="auth-tabs" data-active="signin">
                         <button type="button" class="auth-tab active" id="tabSignIn">Iniciar sesión</button>
                         <button type="button" class="auth-tab" id="tabRegister">Registrarse</button>
                         <div class="tab-slider" id="tabSlider"></div>
                     </div>
+                    <!-- FORMULARIO DE INICIO DE SESIÓN. Al enviarlo ejecuta ejecutarLogin(event) de script.js,
+                         que llama a /api/login en server.js. -->
                     <form class="auth-form" id="form-login" autocomplete="on" onsubmit="ejecutarLogin(event)">
+                        <!-- Campo CORREO ELECTRÓNICO. El icono de persona es solo decorativo (.field-icon). -->
                         <div class="form-group">
                             <label for="login-email">Correo electrónico</label>
                             <div class="input-wrapper">
@@ -197,6 +254,7 @@
                                 <input type="email" id="login-email" placeholder="Ingresa tu correo" autocomplete="email" required>
                             </div>
                         </div>
+                        <!-- Campo CONTRASEÑA con el enlace "¿Olvidaste tu contraseña?" (abre modal-olvide-password). -->
                         <div class="form-group">
                             <div class="label-row">
                                 <label for="login-password">Contraseña</label>
@@ -208,6 +266,7 @@
                                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                 </svg>
                                 <input type="password" id="login-password" data-ojo="1" placeholder="Ingresa tu contraseña" autocomplete="current-password" required>
+                                <!-- OJITO: muestra u oculta la contraseña (script.js cambia el type del input entre password y text). -->
                                 <button type="button" class="eye-toggle" id="eyeToggle" aria-label="Mostrar u ocultar contraseña">
                                     <svg class="eye-icon eye-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -219,8 +278,11 @@
                                     </svg>
                                 </button>
                             </div>
+                            <!-- Enlace para reenviar el correo de confirmación de cuenta (llama a /api/reenviar-verificacion). Estilo en línea: se puede mover cambiando margin-top / text-align. -->
                             <a href="#" class="forgot-link" id="reenviarVerifLink" style="display: block; text-align: right; margin-top: 0.4rem;">¿No confirmaste tu correo? Reenviar</a>
                         </div>
+                        <!-- BOTÓN PRINCIPAL "Iniciar sesión". Su color usa la paleta de la lámpara (style.css .submit-btn).
+                             Para cambiar el texto edita <span class="btn-text">. -->
                         <button type="submit" class="submit-btn" id="submitBtn">
                             <span class="btn-glow-layer"></span>
                             <span class="btn-content">
@@ -231,6 +293,7 @@
                                 </svg>
                             </span>
                         </button>
+                        <!-- Mensaje de estado bajo el botón (por ejemplo "Esperando autorización desde tu correo"). script.js escribe aquí. -->
                         <p id="login-estado-autorizacion" role="status" style="margin-top: 0.75rem; font-size: 0.92rem; font-weight: 600; text-align: center; min-height: 1.2em;"></p>
                     </form>
                 </div>
@@ -239,21 +302,28 @@
     </div>
 
 <!-- ===================== CATÁLOGO ===================== -->
+    <!-- VISTA 2: CATÁLOGO DE INSTRUMENTOS (lo que ven los clientes después de entrar). -->
     <div id="vista-catalogo" style="display: none;">
         <!-- Audio de fondo continuo para el catálogo -->
+        <!-- Música de fondo del catálogo. src="navidad2.mp3" es el archivo (debe estar en la misma carpeta); loop = se repite sin parar. -->
         <audio id="audioFondoCatalogo" src="navidad2.mp3" loop preload="auto"></audio>
 
+        <!-- BARRA SUPERIOR del catálogo (título a la izquierda, botones a la derecha). Colores en style.css (.catalog-header). -->
         <header class="catalog-header">
             <div class="catalog-left">
+                <!-- Aquí script.js coloca el botón "⚙️ Página del administrador" SOLO si quien entró es admin (función verificarSesionUI). -->
                 <div id="nav-admin-catalogo"></div>
                 <div>
-                    <h1>🎼 Academia de Música</h1>
+                    <!-- NOMBRE visible en el catálogo. Cambia el texto (y el emoji) a tu gusto. -->
+                    <h1>Academia de Música</h1>
                     <p>Catálogo de instrumentos</p>
                 </div>
             </div>
 
+            <!-- Grupo de botones del lado derecho de la barra (música y usuario). Se acomodan con los estilos en línea (gap, margin-left). -->
             <div class="catalog-right-actions" style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
                 <!-- Botón único de Silenciar / Activar Música -->
+                <!-- BOTÓN REDONDO para silenciar / activar la música del catálogo. Su estilo (tamaño 40px, borde, color) está en el atributo style. -->
                 <button type="button" onclick="toggleMusicaCatalogo()" title="Silenciar / Activar música" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: white; transition: background 0.2s;">
                     <svg class="catalog-sound-on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
                         <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -267,17 +337,23 @@
                     </svg>
                 </button>
 
+                <!-- Aquí script.js dibuja los botones del usuario: notificaciones, contraseña, perfil con avatar y "Salir" (verificarSesionUI). -->
                 <div class="auth-nav" id="auth-nav" style="display: flex; align-items: center; gap: 10px;"></div>
             </div>
         </header>
 
+        <!-- Contenido principal del catálogo: portada y lista de tarjetas. -->
         <main id="catalogo-contenido">
+            <!-- PORTADA del catálogo: texto de bienvenida y notas musicales 3D. Estilos en style.css (.hero). -->
             <section class="hero">
                 <div class="hero-texto">
+                    <!-- Título y descripción de la portada. Edita los textos aquí. -->
                     <h2>Encuentra tu instrumento</h2>
                     <p>Reserva en línea el instrumento que necesitas para tus clases y eventos.</p>
+                    <!-- Barritas animadas tipo ecualizador de música (solo decoración, 7 barras: cada <i> es una). -->
                     <div class="ecualizador" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
                 </div>
+                <!-- Notas musicales flotantes en 3D (n1, n2, n3). Cada una usa style="–c: color" para su color. -->
                 <div class="escena-3d" aria-hidden="true">
                     <div class="anillo-wrap">
                     </div>
@@ -287,19 +363,28 @@
                 </div>
             </section>
 
+            <!-- REJILLA DE TARJETAS DE INSTRUMENTOS. Está vacía a propósito: cargarCatalogo() en script.js crea aquí cada tarjeta
+                 (foto, datos, estado y botón Reservar). El diseño de la rejilla está en style.css (.catalog-grid). -->
             <div class="catalog-grid" id="grid-instrumentos"></div>
         </main>
     </div>
 
     <!-- ===================== ESCENA NAVIDEÑA ===================== -->
+    <!-- FONDO DECORATIVO (escena navideña o temática del mes) detrás del catálogo y del panel admin. Está oculto en el login.
+         script.js le pone la clase del mes (mes-01 a mes-12) para cambiar el fondo. -->
     <div class="decoracion" id="decoracion" aria-hidden="true" hidden>
+      <!-- Escena completa del fondo (capas con efecto parallax: se mueven distinto con el mouse según data-depth). -->
       <section class="scene" id="home" style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1;">
+        <!-- Estrellitas del cielo (las crea script.js). -->
         <div class="stars" id="stars"></div>
+        <!-- Copos de nieve cayendo (los crea script.js). -->
         <div class="snow" id="snow"></div>
 
+        <!-- Partículas especiales de los meses que NO son diciembre (hojas, corazones, etc.). -->
         <div class="mes-particulas" id="mes-particulas"></div>
 
         <!-- Paso 1: Montañas y Árboles del fondo -->
+        <!-- Montañas de fondo. data-depth = cuánto se mueven (mayor número, más se mueve). Los colores están en fill="#..." de cada path. -->
         <div class="parallax-wrap layer-mountains anim-step-1" data-depth="18">
           <div class="anim-mountains">
             <svg viewBox="0 0 1600 420" preserveAspectRatio="none">
@@ -309,6 +394,7 @@
           </div>
         </div>
 
+        <!-- Pinos laterales (4 pinos: dos oscuros y dos claros). -->
         <div class="parallax-wrap layer-pines anim-step-1" data-depth="30">
           <div class="anim-pines pines-grid">
             <svg class="pine pine-l1" viewBox="0 0 140 280">
@@ -335,6 +421,7 @@
         </div>
 
         <!-- Paso 2: Casas nevadas -->
+        <!-- Casitas nevadas (izquierda y derecha). -->
         <div class="parallax-wrap layer-houses anim-step-2" data-depth="68">
           <div class="houses-grid">
             <div class="anim-house-left house-box">
@@ -387,6 +474,7 @@
         </div>
 
         <!-- Paso 3: Árbol de Navidad central -->
+        <!-- Árbol de Navidad central con estrella. -->
         <div class="parallax-wrap layer-tree anim-step-3" data-depth="50">
           <div class="anim-tree">
             <svg viewBox="0 0 360 440">
@@ -407,6 +495,7 @@
         </div>
 
         <!-- Paso 4: Trineo de Santa cruzando de izquierda a derecha -->
+        <!-- Trineo de Santa con renos que cruza la pantalla (animación cruzarTrineo en style.css). -->
         <div class="parallax-wrap layer-santa anim-step-4" data-depth="42">
           <div class="anim-santa">
             <svg viewBox="0 0 420 150" fill="none">
@@ -433,11 +522,13 @@
         </div>
 
         <!-- Colinas de nieve -->
+        <!-- Colina de nieve trasera. -->
         <div class="parallax-wrap layer-snow-back" data-depth="84">
           <svg viewBox="0 0 1600 220" preserveAspectRatio="none">
             <path d="M0 90 C280 25 560 130 880 75 C1180 22 1400 105 1600 60 L1600 220 L0 220 Z" fill="#e8eef4"/>
           </svg>
         </div>
+        <!-- Colina de nieve delantera (la más cercana). -->
         <div class="parallax-wrap layer-snow-front" data-depth="105">
           <svg viewBox="0 0 1600 180" preserveAspectRatio="none">
             <path d="M0 55 C260 118 520 18 830 78 C1130 135 1390 28 1600 72 L1600 180 L0 180 Z" fill="#ffffff"/>
@@ -447,20 +538,30 @@
     </div>
 
     <!-- ===================== PANEL ADMINISTRADOR ===================== -->
+    <!-- VISTA 3: PANEL DEL ADMINISTRADOR (solo para usuarios admin). Tiene 4 paneles que se cambian con cambiarPanel(0 a 3). -->
     <div id="vista-admin" style="display: none;">
+        <!-- BARRA NARANJA superior del admin con botones de acceso rápido. Color en style.css (.admin-bar). -->
         <div class="admin-bar">
             <div class="admin-bar-left">
+                <!-- Botón ☰ que abre/cierra el menú de paneles (toggleMenuAdmin). -->
                 <button id="btn-hamburguesa" class="btn-hamburguesa" onclick="toggleMenuAdmin()" aria-label="Menú de paneles" aria-expanded="false" aria-controls="menu-admin">☰</button>
-                <button class="btn-titulo-admin" onclick="volverAlCatalogo()" title="Ir al catálogo">⚙️ PÁGINA DEL ADMINISTRADOR</button>
-                <button class="btn btn-dark" onclick="abrirBandejaAdmin()">✉️ Bandeja de Préstamos (<span id="contador-bandeja">0</span>)</button>
+                <!-- Título clicable "PÁGINA DEL ADMINISTRADOR": al pulsarlo vuelve al catálogo. -->
+                <button class="btn-titulo-admin" onclick="volverAlCatalogo()" title="Ir al catálogo">⚙️ PÁGINA DEL USUARIO</button>
+                <!-- Abre la BANDEJA DE PRÉSTAMOS (solicitudes de reserva de los clientes). El número entre paréntesis (contador-bandeja) lo actualiza script.js. -->
+                <button class="btn btn-dark" onclick="abrirBandejaAdmin()">Bandeja de Préstamos (<span id="contador-bandeja">0</span>)</button>
+                <!-- Abre la ventana para subir o mostrar el QR de pagos. -->
                 <button class="btn btn-dark btn-qr" onclick="abrirModalQrAdmin()" title="Subir o mostrar el QR de pagos">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zM6 6h2v2H6V6zM13 3h8v8h-8V3zm2 2v4h4V5h-4zM16 6h2v2h-2V6zM3 13h8v8H3v-8zm2 2v4h4v-4H5zM6 16h2v2H6v-2zM13 13h3v3h-3zM18 13h3v3h-3zM13 18h3v3h-3zM18 18h3v3h-3z"/></svg>
                     QR de pagos
                 </button>
-                <button class="btn btn-dark" onclick="abrirModalPassword()" title="Cambiar mi contraseña">🔑 Contraseña</button>
+                <!-- Abre la ventana para cambiar la contraseña. -->
+                <button class="btn btn-dark" onclick="abrirModalPassword()" title="Cambiar mi contraseña">Contraseña</button>
             </div>
+            <!-- Botón para cerrar la sesión del administrador. -->
             <button class="btn btn-light" onclick="cerrarSesionAdmin()">Cerrar Sesión Admin</button>
 
+            <!-- MENÚ DESPLEGABLE de los 4 paneles. El número de cambiarPanel(n) es la posición del panel (0 = primero).
+                 Para cambiar un nombre de menú, edita el texto del botón. -->
             <nav id="menu-admin" class="menu-admin" aria-label="Paneles del administrador">
                 <button class="activo" onclick="cambiarPanel(0)">1. Registro de instrumentos</button>
                 <button onclick="cambiarPanel(1)">2. Almacén e inventario general</button>
@@ -469,17 +570,21 @@
             </nav>
         </div>
 
+        <!-- Contenedor de los 4 paneles. Solo uno tiene la clase "activo" y se ve a la vez. -->
         <div class="container-slider" id="admin-contenido">
             <!-- Panel 1: registrar instrumento -->
             <section class="panel activo" id="panel-1">
                 <div class="card">
                     <h2>1. Registrar Nuevo Instrumento</h2>
+                    <!-- FORMULARIO para registrar un instrumento. Lo procesa script.js (formInstrumento) y lo guarda con POST /api/instrumentos.
+                         Para agregar un campo nuevo hay que añadirlo aquí, en script.js y en server.js. -->
                     <form id="form-instrumento">
                         <input type="text" id="nombre-instrumento" placeholder="Nombre (ej. Guitarra Clásica)" required>
                         <input type="text" id="tipo-instrumento" placeholder="Tipo (ej. Cuerda, Viento, Percusión)" required>
                         <input type="text" id="num-serie" placeholder="Número de serie único" required>
                         <input type="text" id="marca-instrumento" placeholder="Marca (ej. Yamaha, Fender)" required>
 <input type="text" id="modelo-instrumento" placeholder="Modelo (ej. C40, Player Stratocaster)" required>
+                        <!-- Lista de estados físicos. Los valores deben coincidir con ESTADOS_FISICOS de server.js y script.js. -->
                         <select id="estado-fisico" required>
                             <option value="">Seleccione estado físico inicial</option>
                             <option value="Óptimo">Óptimo</option>
@@ -487,6 +592,7 @@
                             <option value="En reparación">En reparación</option>
                         </select>
                         <label for="foto-instrumento">Foto del instrumento (opcional):</label>
+                        <!-- Selector de foto del instrumento (opcional). script.js la reduce a 800 px y muestra la vista previa en la imagen de abajo. -->
                         <input type="file" id="foto-instrumento" accept="image/*">
                         <img id="vista-previa-foto" class="foto-previa" alt="Vista previa" style="display: none;">
                         <button type="submit" class="btn btn-primary">Guardar Instrumento</button>
@@ -501,6 +607,8 @@
                 <div class="card">
                     <h2>2. Almacenamiento e Inventario General</h2>
                     <div class="tabla-scroll">
+                        <!-- TABLA DE INVENTARIO. Las filas las crea renderizarTablaInstrumentos() en script.js dentro del tbody.
+                             Para agregar o quitar columnas hay que cambiar el <th> de aquí y la fila en script.js. -->
                         <table class="tabla-cards">
                             <thead>
                                 <tr>
@@ -516,6 +624,7 @@
                                     <th>Disponibilidad</th>
                                 </tr>
                             </thead>
+                            <!-- Aquí se insertan las filas de instrumentos (con botones de editar, ver, eliminar y cambio de estado). -->
                             <tbody id="tabla-instrumentos"></tbody>
                         </table>
                     </div>
@@ -528,6 +637,8 @@
                 <button class="btn btn-nav" onclick="cambiarPanel(1)">⬅️ Almacenamiento</button>
                 <div class="card">
                     <h2>3. Registro de Préstamos</h2>
+                    <!-- FORMULARIO DE PRÉSTAMO presencial (el admin presta un instrumento). Se envía con POST /api/prestamos.
+                         Incluye firma digital, datos del solicitante y casilla de conformidad. -->
                     <form id="form-prestamo">
                         <select id="select-instrumento-prestamo" required>
                             <option value="">Seleccione un instrumento disponible</option>
@@ -543,6 +654,7 @@
                         <div class="firma-fila">
                             <div class="firma-col">
                                 <label>Firma Digital (firma con el dedo o el mouse):</label>
+                                <!-- Lienzo para la FIRMA DIGITAL (se dibuja con el dedo o mouse). width/height = tamaño del recuadro. Código en script.js (sección firma digital). -->
                                 <canvas id="canvas-firma" width="360" height="140"></canvas>
                                 <button type="button" id="btn-limpiar-firma" class="btn btn-danger btn-sm">Borrar firma</button>
                             </div>
@@ -552,6 +664,7 @@
                             </div>
                         </div>
 
+                        <!-- Casilla obligatoria: el solicitante acepta el estado del instrumento y las sanciones. -->
                         <label class="check-conformidad">
                             <input type="checkbox" id="conformidad" required>
                             <span>El solicitante recibe el instrumento en el estado indicado y acepta las sanciones por retraso o daño.</span>
@@ -569,10 +682,12 @@
                 <div class="card">
                     <h2>4. Control de Devoluciones y Cronómetro</h2>
                     <div class="tabla-scroll">
+                        <!-- TABLA DE DEVOLUCIONES: préstamos activos con cronómetro de tiempo, multa y botón para devolver. -->
                         <table class="tabla-cards">
                             <thead>
                                 <tr><th>ID</th><th>Instrumento</th><th>Solicitante</th><th>Salida / Límite</th><th>Cronómetro</th><th>Multa</th><th>Acción</th></tr>
                             </thead>
+                            <!-- Aquí script.js (cargarPrestamosYDevoluciones) inserta cada préstamo activo. -->
                             <tbody id="tabla-devoluciones"></tbody>
                         </table>
                     </div>
@@ -582,6 +697,10 @@
     </div>
 
     <!-- ===================== MODALES ===================== -->
+    <!-- VENTANAS EMERGENTES (MODALES): están ocultas (display none) y se abren con abrirModal("id") y cierran con cerrarModal("id").
+         El fondo oscuro es .modal-overlay y la caja blanca .modal-box (style.css).
+         
+         MODAL: bandeja de solicitudes para el admin (aceptar / rechazar / eliminar reservas). -->
     <div id="modal-bandeja-admin" class="modal-overlay">
         <div class="modal-box modal-ancho">
             <h3>✉️ Bandeja de Préstamos y Solicitudes</h3>
@@ -590,6 +709,7 @@
         </div>
     </div>
 
+    <!-- MODAL: notificaciones del cliente (estado de sus reservas). -->
     <div id="modal-bandeja-cliente" class="modal-overlay">
         <div class="modal-box">
             <h3>✉️ Mis Notificaciones de Préstamo</h3>
@@ -598,6 +718,7 @@
         </div>
     </div>
 
+    <!-- MODAL: RESERVA VIRTUAL de un instrumento (formulario del cliente + pago del adelanto). Se envía con enviarReservaVirtual(). -->
     <div id="modal-reserva" class="modal-overlay">
         <div class="modal-box">
             <h3>🎵 Reserva Virtual de Instrumento</h3>
@@ -622,12 +743,15 @@
                 <input type="text" id="res-ci" required>
                 <label for="res-telefono">Teléfono:</label>
                 <input type="text" id="res-telefono" required>
+                <!-- Caja de PAGO DEL ADELANTO. El monto (Bs 25.00) se toma de la configuración del servidor (CONFIG.adelantoReserva en server.js). -->
                 <div class="pago-box">
                     <label for="res-metodo-pago"><strong>💳 Adelanto de reserva: <span id="monto-adelanto">Bs 25.00</span></strong></label>
+                    <!-- Elige el método de pago: tarjeta o QR. cambiarMetodoPago() muestra/oculta las dos cajas de abajo. -->
                     <select id="res-metodo-pago" onchange="cambiarMetodoPago()">
                         <option value="tarjeta">Tarjeta de Crédito / Débito</option>
                         <option value="qr">Pago por QR</option>
                     </select>
+                    <!-- Campos de la TARJETA. script.js formatea el número, valida con el algoritmo de Luhn y comprueba el vencimiento. -->
                     <div id="pago-tarjeta" class="pago-detalle">
                         <label for="tarj-titular">Nombre del titular:</label>
                         <input type="text" id="tarj-titular" placeholder="Como aparece en la tarjeta" autocomplete="cc-name">
@@ -644,6 +768,7 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Pago por QR: muestra la imagen subida por el administrador y un enlace para descargarla. -->
                     <div id="pago-qr" class="pago-detalle" hidden>
                         <p>Escanea el código QR con la app de tu banco para pagar el adelanto.</p>
                         <img id="qr-pago-img" class="qr-pago-img" alt="Código QR de pago" hidden>
@@ -657,11 +782,14 @@
         </div>
     </div>
 
+<!-- MODAL: REGISTRO DE NUEVO USUARIO. Aquí los estilos están escritos dentro de cada elemento (atributo style):
+     busca background: #f77171 (fondo de la ventana) y linear-gradient(...) (encabezado) para cambiar colores. -->
 <div id="modal-registro" class="modal-overlay">
-        <div class="modal-box" style="background: #f77171; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); overflow: hidden; padding: 0; max-width: 420px; width: 90%;">
+        <div class="modal-box" style="background: #ffffff; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.25); overflow: hidden; padding: 0; max-width: 420px; width: 90%;">
             
             <!-- Encabezado con Estilo y Gradiente -->
-            <div style="background: linear-gradient(135deg, #f60303, #f40202); padding: 25px 20px; color: white; text-align: center;">
+            <!-- Encabezado de color con degradado (cambia los dos colores #f60303 / #f40202), icono, título y subtítulo. -->
+            <div style="background: linear-gradient(135deg, #5f5d1b, #b5c113); padding: 25px 20px; color: white; text-align: center;">
                 <div style="font-size: 32px; margin-bottom: 6px;">🎼</div>
                 <h3 style="margin: 0; font-size: 20px; font-weight: 700;">Registro de Nuevo Usuario</h3>
                 <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.85;">Únete a nuestra Academia de Música</p>
@@ -669,27 +797,29 @@
 
             <!-- Cuerpo del Formulario con Espaciado y Estilos en Inputs -->
             <div style="padding: 25px;">
+                <!-- Formulario de registro; al enviar ejecuta ejecutarRegistro(event). Los campos tienen su estilo en línea (borde, redondeo, relleno). -->
                 <form id="form-registro" onsubmit="ejecutarRegistro(event)" style="display: flex; flex-direction: column; gap: 14px;">
                     
-                    <input type="text" id="reg-nombre" placeholder="👤 Nombre completo" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    <input type="text" id="reg-nombre" placeholder="Nombre completo" required style="width: 100%; padding: 12px 15px; border: 2px solid #d4af37; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
-                    <input type="email" id="reg-email" placeholder="✉️ Correo electrónico" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    <input type="email" id="reg-email" placeholder="Correo electrónico (oficial)" required style="width: 100%; padding: 12px 15px; border: 2px solid #d4af37; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
-                    <input type="password" id="reg-password" placeholder="🔒 Contraseña (mínimo 8 caracteres)" minlength="8" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    <input type="password" id="reg-password" placeholder="Contraseña (mínimo 8 caracteres)" minlength="8" required style="width: 100%; padding: 12px 15px; border: 2px solid #d4af37; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
-                    <input type="text" id="reg-ci" placeholder="🆔 Carnet de Identidad (CI)" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    <input type="text" id="reg-ci" placeholder="Carnet de Identidad (CI)" required style="width: 100%; padding: 12px 15px; border: 2px solid #d4af37; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
-                    <input type="text" id="reg-telefono" placeholder="📱 Teléfono" required style="width: 100%; padding: 12px 15px; border: 2px solid #e5e7eb; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
+                    <input type="text" id="reg-telefono" placeholder="Teléfono" required style="width: 100%; padding: 12px 15px; border: 2px solid #d4af37; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#e5e7eb'">
                     
-                    <button type="submit" class="btn btn-info btn-block" style="margin-top: 5px; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #fb011a, #07c4f3); border: none; color: white; box-shadow: 0 4px 10px rgba(59,130,246,0.3);">Registrarse</button>
+                    <button type="submit" class="btn btn-info btn-block" style="margin-top: 5px; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #5f5d1b, #b5c113); border: none; color: white; box-shadow: 0 4px 10px rgba(59,130,246,0.3);">Registrarse</button>
                 </form>
 
-                <button class="btn btn-danger btn-block" style="margin-top: 10px; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; width: 100%; background: #ef4444; border: none; color: white;" onclick="cerrarModal('modal-registro')">Cerrar</button>
+                <button class="btn btn-danger btn-block" style="margin-top: 10px; padding: 12px; border-radius: 10px; font-weight: 600; cursor: pointer; width: 100%; background: #90a016e8; border: none; color: white;" onclick="cerrarModal('modal-registro')">Cerrar</button>
             </div>
 
         </div>
     </div>
 
+    <!-- MODAL: DEVOLUCIÓN e inspección. Se elige el estado físico y el nivel de daño; se muestra la multa calculada antes de confirmar. -->
     <div id="modal-devolucion" class="modal-overlay">
         <div class="modal-box">
             <h3>↩️ Devolución e Inspección del Instrumento</h3>
@@ -714,6 +844,7 @@
         </div>
     </div>
 
+    <!-- MODAL: ACTA DE ENTREGA (resumen del préstamo con la firma). -->
     <div id="modal-acta" class="modal-overlay">
         <div class="modal-box">
             <h3>📄 Acta de Entrega</h3>
@@ -722,9 +853,10 @@
         </div>
     </div>
 
+    <!-- MODAL: CAMBIAR CONTRASEÑA (actual + nueva + repetir). Mínimo 8 caracteres. -->
     <div id="modal-password" class="modal-overlay">
         <div class="modal-box">
-            <h3>🔑 Cambiar contraseña</h3>
+            <h3>Cambiar contraseña</h3>
             <form id="form-password" onsubmit="cambiarPassword(event)">
                 <label for="pw-actual">Contraseña actual:</label>
                 <input type="password" id="pw-actual" autocomplete="current-password" required>
@@ -739,6 +871,7 @@
         </div>
     </div>
 
+    <!-- MODAL: administrador sube, guarda, muestra o quita la imagen del QR de pagos. -->
     <div id="modal-qr-admin" class="modal-overlay">
         <div class="modal-box">
             <h3>🔳 Código QR de pagos</h3>
@@ -755,6 +888,7 @@
         </div>
     </div>
 
+    <!-- MODAL: QR en grande para que el cliente lo escanee en persona. Un clic en cualquier parte lo cierra. -->
     <div id="modal-qr-pantalla" class="modal-overlay" onclick="cerrarModal('modal-qr-pantalla')">
         <div class="modal-box qr-pantalla-box">
             <h3>Escanea para pagar</h3>
@@ -763,6 +897,7 @@
         </div>
     </div>
 
+    <!-- MODAL: PERFIL del usuario. Foto/avatar actual, datos, galería de 10 avatares, botón de credencial y de guardar avatar. -->
     <div id="modal-perfil-usuario" class="modal-overlay">
         <div class="modal-box modal-perfil-box">
             <h3>👤 Perfil de Usuario</h3>
@@ -787,9 +922,10 @@
 
     <!-- ===================== SELFIE (CÁMARA) ===================== -->
     <!-- ===================== OLVIDÉ MI CONTRASEÑA (verificación de identidad) ===================== -->
+    <!-- MODAL: RECUPERAR CONTRASEÑA. Pide correo, nombre, CI y teléfono; si coinciden con lo registrado, genera una contraseña temporal. -->
     <div id="modal-olvide-password" class="modal-overlay">
         <div class="modal-box">
-            <h3>🔑 Recuperar contraseña</h3>
+            <h3>Recuperar contraseña</h3>
             <p class="nota">Escribe los mismos datos con los que te registraste. Si coinciden, te daremos una contraseña temporal.</p>
             <form id="form-olvide-password" onsubmit="enviarOlvidePassword(event)">
                 <div class="form-group">
@@ -815,16 +951,18 @@
     </div>
 
     <!-- ===================== CONTRASEÑA TEMPORAL GENERADA ===================== -->
+    <!-- MODAL: muestra la contraseña temporal generada (con botón para copiarla). -->
     <div id="modal-password-temporal" class="modal-overlay">
         <div class="modal-box">
             <h3>✅ Identidad verificada</h3>
-            <p class="nota">Esta es tu nueva contraseña temporal. Apúntala, no se mostrará de nuevo. Te recomendamos cambiarla luego desde "🔑 Contraseña" en tu perfil.</p>
+            <p class="nota">Esta es tu nueva contraseña temporal. Apúntala, no se mostrará de nuevo. Te recomendamos cambiarla luego desde "Contraseña" en tu perfil.</p>
             <p id="password-temporal-valor" style="font-size: 1.4rem; font-weight: 800; letter-spacing: 2px; text-align: center; background: #f1efff; border: 2px dashed #6c5ce7; border-radius: 10px; padding: 14px; margin: 10px 0; word-break: break-all;"></p>
             <button type="button" class="btn btn-info btn-block" onclick="copiarPasswordTemporal()">📋 Copiar</button>
             <button type="button" class="btn btn-success btn-block" style="margin-top: 0.5rem;" onclick="irALoginConPasswordTemporal()">Ir a iniciar sesión</button>
         </div>
     </div>
 
+    <!-- MODAL: SELFIE. Usa la cámara del dispositivo (video) o permite subir una foto desde el equipo. -->
     <div id="modal-camara" class="modal-overlay">
         <div class="modal-box modal-perfil-box">
             <h3>📷 Tómate una selfie</h3>
@@ -840,6 +978,7 @@
     </div>
 
     <!-- ===================== CREDENCIAL ===================== -->
+    <!-- MODAL: CREDENCIAL del cliente como imagen PNG descargable (se dibuja en script.js con canvas). -->
     <div id="modal-credencial" class="modal-overlay">
         <div class="modal-box modal-perfil-box">
             <h3>🪪 Tu credencial</h3>
@@ -849,9 +988,10 @@
         </div>
     </div>
 
+    <!-- MODAL: EDITAR un instrumento ya registrado. -->
     <div id="modal-editar-instrumento" class="modal-overlay">
         <div class="modal-box">
-            <h3>✏️ Editar Instrumento</h3>
+            <h3>Editar Instrumento</h3>
             <form id="form-editar-instrumento" onsubmit="guardarEdicionInstrumento(event)">
                 <input type="hidden" id="edit-inst-id">
                 <label for="edit-inst-nombre">Nombre:</label>
@@ -879,6 +1019,7 @@
         </div>
     </div>
 
+    <!-- MODAL: FICHA con el detalle de un instrumento. -->
     <div id="modal-detalle-instrumento" class="modal-overlay">
         <div class="modal-box">
             <h3>🔍 Detalle del Instrumento</h3>
@@ -887,10 +1028,13 @@
         </div>
     </div>
 
+    <!-- Aquí aparecen los avisos pequeños (verde = éxito, rojo = error) que desaparecen solos. Posición en style.css (#toast-container). -->
     <div id="toast-container" aria-live="polite"></div>
 
+    <!-- LIBRERÍAS GSAP (animaciones de la lámpara y su cordón). Necesitan internet. gsap = animaciones, Draggable = arrastrar la cuerda. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/Draggable.min.js"></script>
+    <!-- Conecta con script.js: toda la lógica (login, catálogo, panel admin, pagos, etc.). Debe ir al final, después de todo el HTML. -->
     <script src="script.js"></script>
 </body>
 </html>

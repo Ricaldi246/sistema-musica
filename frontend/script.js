@@ -1,8 +1,14 @@
+// ARCHIVO: script.js (lógica del navegador)
+// Aquí está todo lo que "se mueve": la lámpara y su cordón, el login/registro, el catálogo, el panel de administrador,
+// los pagos, las firmas, el perfil con avatares, la cámara y la credencial.
+// Se comunica con server.js mediante la función api() (rutas que empiezan con /api/...).
+// El diseño (colores, posiciones, tamaños) NO está aquí: está en style.css.
 // =====================================================================
 //  UTILIDADES Y ESTADO GLOBAL
 // =====================================================================
 // La lámpara del login necesita GSAP (se descarga de internet). Si no cargó, se avisa
 // en pantalla en vez de dejar la página en blanco.
+// COMPROBACIÓN: la lámpara necesita la librería GSAP (internet). Si no cargó, muestra un mensaje en vez de dejar la página en blanco.
 if (typeof gsap === 'undefined' || typeof Draggable === 'undefined') {
     document.body.insertAdjacentHTML('afterbegin',
         '<p style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;' +
@@ -10,31 +16,41 @@ if (typeof gsap === 'undefined' || typeof Draggable === 'undefined') {
         'No se pudo cargar la librería de animaciones (GSAP). Revisa tu conexión a internet y recarga la página.</p>');
     throw new Error('GSAP no se cargó.');
 }
+// ATAJO: $("miId") equivale a document.getElementById("miId"). Se usa en todo el archivo.
 const $ = (id) => document.getElementById(id);
+// Agrega un cero a la izquierda (5 pasa a 05). Sirve para fechas y horas.
 const pad = (n) => String(n).padStart(2, '0');
+// Devuelve un número al azar entre un mínimo y un máximo (usado en animaciones).
 const random = (min, max) => Math.random() * (max - min) + min;
+// Lista de estados físicos posibles de un instrumento. Debe coincidir con server.js y con los select del HTML.
 const ESTADOS_FISICOS = ['Óptimo', 'Desgaste regular', 'En reparación'];
 
+// Tarifas por defecto. Los valores REALES los pide al servidor cargarConfig() (se cambian en CONFIG dentro de server.js).
 let config = { moneda: 'Bs', adelantoReserva: 25, tarifaRetrasoPorDia: 10, horasGracia: 1, topeMultaRetraso: 100, multasDano: {} };
+// Memoria temporal: guarda instrumentos, préstamos y otros datos para no pedirlos al servidor a cada rato.
 let listaInstrumentosCache = [];
 let prestamosCache = [];
 let animacionIntroYaEjecutada = false;
 let intervaloCronometro = null;
 let qrDisponible = false;
 
+// SEGURIDAD: convierte caracteres especiales (< > & " ') en texto inofensivo antes de mostrarlo en pantalla.
 function esc(valor) {
     return String(valor ?? '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Da formato al dinero, por ejemplo "Bs 25.00". La moneda sale de config.moneda (se cambia en server.js).
 function moneda(n) { return `${config.moneda} ${Number(n || 0).toFixed(2)}`; }
 
+// Devuelve la fecha y hora actuales en el formato que necesitan los campos datetime-local.
 function ahoraLocalInput() {
     const d = new Date();
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Muestra una fecha en formato legible para Bolivia (día/mes/año hora:minutos).
 function verFecha(f) {
     if (!f) return '—';
     const d = new Date(f);
@@ -42,11 +58,15 @@ function verFecha(f) {
     return d.toLocaleString('es-BO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+// Lee del navegador (localStorage) los datos de la sesión iniciada: token y usuario.
 function getSesion() {
     try { return JSON.parse(localStorage.getItem('sesion')); } catch (e) { return null; }
 }
+// Guarda la sesión en el navegador para que no se pierda al recargar la página.
 function guardarSesion(sesion) { localStorage.setItem('sesion', JSON.stringify(sesion)); }
 
+// FUNCIÓN CENTRAL para hablar con el servidor: envía la petición, agrega automáticamente el token de sesión (Authorization),
+// maneja errores de conexión y, si la sesión expiró (error 401), cierra la sesión y recarga la página.
 async function api(url, { method = 'GET', body } = {}) {
     const headers = {};
     const sesion = getSesion();
@@ -72,6 +92,8 @@ async function api(url, { method = 'GET', body } = {}) {
     return data;
 }
 
+// Muestra un aviso pequeño abajo a la derecha (verde = ok, rojo = error). Desaparece solo (3.5 s ok, 6 s error).
+// Para cambiar el tiempo, edita los números 6000 / 3500.
 function toast(mensaje, tipo = 'ok') {
     const contenedor = $('toast-container');
     if (!contenedor) return;
@@ -84,6 +106,7 @@ function toast(mensaje, tipo = 'ok') {
 }
 
 // Botón de doble clic: el primer clic pide confirmar, el segundo ejecuta
+// Botón de doble clic: el primer clic cambia el texto a "¿Seguro?" y el segundo (en 3 segundos) ejecuta la acción. Evita borrar por accidente.
 function confirmarClic(boton) {
     if (!boton) return true;
     if (boton.dataset.confirmando === '1') { delete boton.dataset.confirmando; return true; }
@@ -99,6 +122,7 @@ function confirmarClic(boton) {
     return false;
 }
 
+// Pide al servidor las tarifas y la moneda (ruta /api/config) y las guarda en config.
 async function cargarConfig() {
     try { config = await api('/api/config'); } catch (e) { console.error(e); }
 }
@@ -106,6 +130,7 @@ async function cargarConfig() {
 // =====================================================================
 //  LOGIN CON LÁMPARA
 // =====================================================================
+  // LÁMPARA DEL LOGIN: referencias a las piezas del HTML que se van a mover (cordón, bolita, pantalla, botón de sonido).
   // DOM Elements
   const body = document.body;
   const room = $("vista-login");
@@ -117,6 +142,7 @@ async function cargarConfig() {
   const soundOnIcon = soundToggle.querySelector(".sound-on");
   const soundOffIcon = soundToggle.querySelector(".sound-off");
 
+  // Referencias a los elementos de la tarjeta de login (pestañas, ojito, campo de contraseña).
   // Form Elements
   const loginCard = document.getElementById("loginCard");
   const tabSignIn = document.getElementById("tabSignIn");
@@ -126,12 +152,17 @@ async function cargarConfig() {
   const eyeShow = eyeToggle.querySelector(".eye-show");
   const eyeHide = eyeToggle.querySelector(".eye-hide");
 
+  // Estado actual: lámpara encendida (isOn), sonido activo, pestaña activa.
   // State
   let isOn = false;
   let isSoundEnabled = true;
   let activeTab = "signin";
   let isSimulatingPull = false;
 
+  // MEDIDAS DEL CORDÓN (coordenadas dentro del dibujo SVG de la lámpara):
+  // ANCHOR_X/Y = punto de donde nace el cordón (en la pantalla)   REST_X/Y = posición de reposo de la bolita
+  // MAX_STRETCH = cuánto se puede estirar hacia abajo   TRIGGER_PULL = cuánto hay que jalar para que encienda.
+  // Si mueves la bolita en el SVG del HTML, debes ajustar estos números.
   // Elastic String Geometry
   const ANCHOR_X = 245;
   const ANCHOR_Y = 212;
@@ -145,6 +176,7 @@ async function cargarConfig() {
   let twangAmp = 0;
   let twangStartTime = 0;
 
+  // Dibuja el cordón como una curva elástica que se adelgaza al estirarse y vibra al soltarlo.
   function renderElasticString(curX, curY) {
     let twangOffset = 0;
     if (twangAmp > 0.05) {
@@ -163,9 +195,11 @@ async function cargarConfig() {
     elasticCord.setAttribute("stroke-width", strokeWidth.toFixed(2));
   }
 
+  // Sonidos sintetizados (sin archivos): el "tirón" de la cuerda y el cambio de color.
   // Web Audio Synthesizer
   let audioCtx = null;
 
+  // Activa el audio del navegador (los navegadores exigen un clic del usuario antes de dar sonido).
   function initAudio() {
     if (!audioCtx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -176,9 +210,11 @@ async function cargarConfig() {
     }
   }
 
+// MÚSICA al encender la lámpara. navidad.mp3 es el archivo (en la misma carpeta). volume = 0.6 es el volumen (0 a 1).
 const audioLampara = new Audio('navidad.mp3');
 audioLampara.volume = 0.6;
 
+// Cambia entre el icono de sonido activo y silenciado del botón del login.
 function actualizarIconosSonidoLogin() {
   if (!soundToggle) return;
   const onIcon = soundToggle.querySelector(".sound-on");
@@ -189,6 +225,7 @@ function actualizarIconosSonidoLogin() {
   soundToggle.setAttribute("title", isSoundEnabled ? "Silenciar música" : "Activar música");
 }
 
+// Pausa la música de la lámpara y la devuelve al inicio.
 function detenerAudioLampara() {
   try {
     if (typeof audioLampara !== "undefined" && audioLampara) {
@@ -198,6 +235,7 @@ function detenerAudioLampara() {
   } catch (e) {}
 }
 
+// Sonido sintetizado del cordón al jalarlo y soltarlo (cambia según se enciende o apaga).
 function playElasticPluckSound(pullDist, turningOn) {
   if (!isSoundEnabled || turningOn === false) {
     detenerAudioLampara();
@@ -250,6 +288,8 @@ if (soundToggle) {
     } catch (e) { }
   }
 
+  // CAMBIO DE COLOR DE LA LÁMPARA: al hacer clic en un circulito se cambia data-color del body
+  // (el CSS cambia todas las variables de color), cambia el color de las partículas y suena un efecto.
   // Color Palette Switcher
   const colorDots = document.querySelectorAll(".color-dot-btn");
   let currentColor = "amber";
@@ -284,6 +324,8 @@ if (soundToggle) {
     });
   });
 
+  // ARRASTRE DE LA BOLITA: bounds limita hasta dónde se puede mover (minY/maxY = abajo, minX/maxX = lados).
+  // Al soltar, si se jaló lo suficiente (TRIGGER_PULL), se enciende o apaga la lámpara.
   // Elastic Cord Draggable Interaction
   Draggable.create(cordBead, {
     type: "x,y",
@@ -394,15 +436,18 @@ if (soundToggle) {
   }
 
   // Lamp State Controller
+  // Alterna la lámpara: si está encendida la apaga y al revés.
   function toggleLamp() {
     setLampState(!isOn);
   }
 
   // Enciende o apaga la lámpara solo si hace falta
+  // Enciende o apaga la lámpara solo si hace falta (la usan otras partes del sistema).
   function setLamp(encendida) {
     if (isOn !== encendida) setLampState(encendida);
   }
 
+  // ENCIENDE / APAGA la lámpara: cambia data-on del body, anima el bombillo, el haz de luz y muestra u oculta la tarjeta de login.
   function setLampState(targetState) {
     isOn = targetState;
     body.setAttribute("data-on", isOn ? "true" : "false");
@@ -459,10 +504,13 @@ if (soundToggle) {
   }
 
   // Canvas Dust Particles
+  // PARTÍCULAS DE POLVO / LUCIÉRNAGAS que flotan con la luz.
+  // PARTICLE_COUNT = cantidad de partículas. particleThemes = color de las partículas para cada color de la paleta (valores RGB).
   const canvas = document.getElementById("dustCanvas");
   const ctx = canvas.getContext("2d");
   let width, height;
   let particles = [];
+  // Cantidad de partículas (más número = más puntitos, pero más consumo).
   const PARTICLE_COUNT = 60;
 
   const particleThemes = {
@@ -535,9 +583,12 @@ if (soundToggle) {
   renderParticles();
 
   // Pestañas: "Registrarse" abre el formulario de registro
+  // Clic en la pestaña "Registrarse": abre la ventana del registro.
   tabRegister.addEventListener("click", () => abrirModal("modal-registro"));
+  // Clic en "Iniciar sesión": solo pone el cursor en el campo del correo.
   tabSignIn.addEventListener("click", () => $("login-email").focus());
 
+  // Enlace "¿Olvidaste tu contraseña?": abre la ventana de recuperación.
   const forgotLink = document.getElementById("forgotLink");
   if (forgotLink) {
     forgotLink.addEventListener("click", (e) => {
@@ -548,6 +599,7 @@ if (soundToggle) {
     });
   }
 
+  // Enlace "¿No confirmaste tu correo? Reenviar": pide al servidor que vuelva a enviar el correo de confirmación.
   const reenviarVerifLink = document.getElementById("reenviarVerifLink");
   if (reenviarVerifLink) {
     reenviarVerifLink.addEventListener("click", async (e) => {
@@ -610,6 +662,8 @@ if (soundToggle) {
 // =====================================================================
 //  NAVEGACIÓN ENTRE VISTAS Y MODALES
 // =====================================================================
+// CAMBIA DE PANTALLA: muestra solo una vista (login, catalogo o admin). También controla la música del catálogo,
+// activa el fondo decorativo según el mes y ejecuta la animación de entrada del contenido.
 function mostrarVista(nombre) {
     if (room) room.style.display = nombre === 'login' ? 'block' : 'none';
     const vistaCat = $('vista-catalogo');
@@ -652,31 +706,37 @@ function mostrarVista(nombre) {
     }
 }
 
+// Abre una ventana emergente por su id (por ejemplo abrirModal("modal-registro")).
 function abrirModal(id) { $(id).style.display = 'flex'; }
+// Cierra una ventana emergente y oculta las contraseñas que se estaban mostrando.
 function cerrarModal(id) {
     const modal = $(id);
     modal.style.display = 'none';
     ocultarPasswords(modal);
 }
 
+// Entra al panel del administrador (primer panel) y actualiza el contador de la bandeja.
 function mostrarPaginaAdmin() {
     mostrarVista('admin');
     cambiarPanel(0);
     actualizarContadorBandejaAdmin();
 }
 
+// Vuelve al catálogo, refresca los botones de usuario y recarga las tarjetas de instrumentos.
 function volverAlCatalogo() {
     mostrarVista('catalogo');
     verificarSesionUI();
     cargarCatalogo();
 }
 
+// Abre o cierra el menú desplegable ☰ del admin.
 function toggleMenuAdmin() {
     const menu = $('menu-admin');
     const abierto = menu.classList.toggle('abierto');
     $('btn-hamburguesa').setAttribute('aria-expanded', String(abierto));
 }
 
+// Cierra el menú del admin.
 function cerrarMenuAdmin() {
     const menu = $('menu-admin');
     if (menu) menu.classList.remove('abierto');
@@ -684,13 +744,16 @@ function cerrarMenuAdmin() {
     if (boton) boton.setAttribute('aria-expanded', 'false');
 }
 
+// Si se hace clic fuera del menú del admin, el menú se cierra solo.
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#menu-admin') && !e.target.closest('#btn-hamburguesa')) cerrarMenuAdmin();
 });
+// Con la tecla ESC se cierra el menú y el QR en pantalla grande.
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { cerrarMenuAdmin(); cerrarModal('modal-qr-pantalla'); }
 });
 
+// CAMBIA DE PANEL en el admin (0 = Registro, 1 = Inventario, 2 = Préstamos, 3 = Devoluciones): muestra uno y marca su botón del menú.
 function cambiarPanel(indicePanel) {
     document.querySelectorAll('.panel').forEach((panel, index) => {
         panel.classList.toggle('activo', index === indicePanel);
@@ -709,6 +772,7 @@ function cambiarPanel(indicePanel) {
     }
 }
 
+// El admin borra un registro de préstamo del historial (pide doble clic de confirmación).
 async function borrarRegistroPrestamoAdmin(id, boton) {
     if (!confirmarClic(boton)) return;
     const numId = Number(id);
@@ -725,6 +789,7 @@ async function borrarRegistroPrestamoAdmin(id, boton) {
     }
 }
 
+// Carga los préstamos desde el servidor, dibuja la tabla de devoluciones y arranca el cronómetro que se actualiza cada segundo.
 async function cargarPrestamosYDevoluciones() {
     const tbody = $('tabla-devoluciones');
     if (!tbody) return;
@@ -784,8 +849,10 @@ const acciones = `
 // =====================================================================
 //  LOGIN, REGISTRO Y SESIÓN
 // =====================================================================
+// LOGIN, REGISTRO Y SESIÓN: guarda el temporizador que consulta si el usuario autorizó el inicio de sesión desde su correo.
 let intervaloAutorizacionLogin = null;
 
+// Detiene la espera de autorización del login.
 function limpiarEsperaAutorizacionLogin() {
     if (intervaloAutorizacionLogin) {
         clearInterval(intervaloAutorizacionLogin);
@@ -793,6 +860,7 @@ function limpiarEsperaAutorizacionLogin() {
     }
 }
 
+// Escribe un mensaje de estado bajo el botón de login (el color por defecto es amarillo; verde = autorizado).
 function setMensajeAutorizacionLogin(texto, color = '#fbbf24') {
     const el = $('login-estado-autorizacion');
     if (!el) return;
@@ -800,6 +868,7 @@ function setMensajeAutorizacionLogin(texto, color = '#fbbf24') {
     el.style.color = color;
 }
 
+// Cuando el login fue aprobado: guarda la sesión, limpia la contraseña y envía al admin a su panel o al cliente al catálogo.
 async function completarAccesoTrasLogin(data) {
     limpiarEsperaAutorizacionLogin();
     setMensajeAutorizacionLogin('Inicio de sesión autorizado', '#22c55e');
@@ -819,6 +888,7 @@ async function completarAccesoTrasLogin(data) {
     }
 }
 
+// BOTÓN "INICIAR SESIÓN": envía correo y contraseña a /api/login. Si el servidor pide autorización por correo, espera la aprobación.
 async function ejecutarLogin(e) {
     e.preventDefault();
     if (!isOn) { performSimulatedPull(); return; }
@@ -886,6 +956,7 @@ async function ejecutarLogin(e) {
     }
 }
 
+// FORMULARIO DE REGISTRO: envía nombre, correo, contraseña, CI y teléfono a /api/registro.
 async function ejecutarRegistro(e) {
     e.preventDefault();
     try {
@@ -908,6 +979,8 @@ async function ejecutarRegistro(e) {
     }
 }
 
+// Dibuja los botones del usuario en la barra del catálogo (notificaciones, contraseña, perfil con avatar, Salir)
+// y el botón "Página del administrador" solo si es admin. Para cambiar esos botones, edita el HTML dentro de esta función.
 function verificarSesionUI() {
     const sesion = getSesion();
     const nav = $('auth-nav');
@@ -918,8 +991,8 @@ function verificarSesionUI() {
     const avatarActual = obtenerAvatarUsuario(sesion.usuario);
 
     nav.innerHTML = `
-        ${esAdmin ? '' : '<button class="btn btn-dark" onclick="abrirBandejaCliente()">✉️ Mis Notificaciones</button>'}
-        <button class="btn btn-dark" onclick="abrirModalPassword()" title="Cambiar mi contraseña">🔑 Contraseña</button>
+        ${esAdmin ? '' : '<button class="btn btn-dark" onclick="abrirBandejaCliente()">Mis Notificaciones</button>'}
+        <button class="btn btn-dark" onclick="abrirModalPassword()" title="Cambiar mi contraseña">Contraseña</button>
         <button type="button" class="btn-usuario-perfil" onclick="abrirModalPerfil()" title="Ver mi perfil y cambiar avatar">
             <img class="perfil-mini-avatar" src="${esc(avatarActual.src)}" alt="${esc(avatarActual.nombre)}">
             <span>${esc(sesion.usuario.nombre)}</span>
@@ -934,6 +1007,7 @@ function verificarSesionUI() {
     }
 }
 
+// Cierra la sesión: avisa al servidor, borra la sesión guardada y recarga la página.
 async function cerrarSesion() {
     try { await api('/api/logout', { method: 'POST' }); } catch (e) { /* aunque falle, cerramos igual */ }
     localStorage.removeItem('sesion');
@@ -945,6 +1019,7 @@ function cerrarSesionAdmin() { cerrarSesion(); }
 // =====================================================================
 //  BANDEJAS (ADMIN Y CLIENTE)
 // =====================================================================
+// Actualiza el número de solicitudes pendientes que se ve en el botón "Bandeja de Préstamos".
 async function actualizarContadorBandejaAdmin() {
     try {
         const reservas = await api('/api/reservas');
@@ -953,6 +1028,7 @@ async function actualizarContadorBandejaAdmin() {
     } catch (err) { console.error(err); }
 }
 
+// Abre la bandeja del admin y lista las solicitudes de reserva con botones Aceptar, Rechazar y Eliminar.
 async function abrirBandejaAdmin() {
     try {
         const reservas = await api('/api/reservas');
@@ -997,6 +1073,7 @@ async function abrirBandejaAdmin() {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+// El admin elimina una reserva de la lista.
 async function eliminarReservaAdmin(id, boton) {
     if (!confirmarClic(boton)) return;
     try {
@@ -1009,6 +1086,7 @@ async function eliminarReservaAdmin(id, boton) {
     }
 }
 
+// El admin ACEPTA una reserva: el cliente recibe la aprobación y se crea el préstamo.
 async function aceptarReserva(id) {
     try {
         await api(`/api/reservas/${id}/aceptar`, { method: 'POST' });
@@ -1023,6 +1101,7 @@ async function aceptarReserva(id) {
     }
 }
 
+// El admin RECHAZA una reserva.
 async function rechazarReserva(id, boton) {
     if (!confirmarClic(boton)) return;
     try {
@@ -1032,6 +1111,7 @@ async function rechazarReserva(id, boton) {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+// Opciones de cada cuánto se borran automáticamente las notificaciones del cliente.
 const OPCIONES_BORRADO_NOTIF = [
     { valor: 'ninguno', etiqueta: 'No borrar nada', dias: null },
     { valor: '1d', etiqueta: 'Cada 1 día', dias: 1 },
@@ -1041,6 +1121,7 @@ const OPCIONES_BORRADO_NOTIF = [
     { valor: '30d', etiqueta: 'Cada mes', dias: 30 }
 ];
 
+// Nombre con el que se guardan las preferencias de notificaciones de cada usuario en el navegador.
 function claveEstadoNotifUsuario() {
     const sesion = getSesion();
     const u = sesion && sesion.usuario;
@@ -1048,6 +1129,7 @@ function claveEstadoNotifUsuario() {
     return `notif_cliente_${String(id).toLowerCase()}`;
 }
 
+// Lee las preferencias de notificaciones guardadas.
 function leerEstadoNotifUsuario() {
     try {
         const raw = JSON.parse(localStorage.getItem(claveEstadoNotifUsuario()) || '{}');
@@ -1060,10 +1142,12 @@ function leerEstadoNotifUsuario() {
     }
 }
 
+// Guarda las preferencias de notificaciones.
 function guardarEstadoNotifUsuario(estado) {
     localStorage.setItem(claveEstadoNotifUsuario(), JSON.stringify(estado));
 }
 
+// Oculta las notificaciones viejas según la frecuencia de borrado elegida.
 function aplicarBorradoAutomaticoNotif(notificaciones, estado) {
     const cfg = OPCIONES_BORRADO_NOTIF.find((o) => o.valor === estado.frecuencia);
     if (!cfg || !cfg.dias) return notificaciones;
@@ -1087,6 +1171,7 @@ function aplicarBorradoAutomaticoNotif(notificaciones, estado) {
     return filtradas;
 }
 
+// El cliente oculta una notificación.
 function borrarNotificacionCliente(id, boton) {
     if (!confirmarClic(boton)) return;
     const estado = leerEstadoNotifUsuario();
@@ -1096,6 +1181,7 @@ function borrarNotificacionCliente(id, boton) {
     abrirBandejaCliente();
 }
 
+// El cliente oculta todas sus notificaciones de una vez.
 function borrarTodasNotificacionesCliente(notificaciones, boton) {
     if (!confirmarClic(boton)) return;
     const estado = leerEstadoNotifUsuario();
@@ -1108,6 +1194,7 @@ function borrarTodasNotificacionesCliente(notificaciones, boton) {
     abrirBandejaCliente();
 }
 
+// Cambia cada cuánto se borran solas las notificaciones.
 function cambiarFrecuenciaBorradoNotif(nuevaFrecuencia) {
     const estado = leerEstadoNotifUsuario();
     estado.frecuencia = nuevaFrecuencia;
@@ -1117,6 +1204,7 @@ function cambiarFrecuenciaBorradoNotif(nuevaFrecuencia) {
     abrirBandejaCliente();
 }
 
+// El cliente cancela su propia reserva.
 async function cancelarReservaCliente(id, boton) {
     if (!confirmarClic(boton)) return;
     const numId = Number(id);
@@ -1134,6 +1222,7 @@ async function cancelarReservaCliente(id, boton) {
     }
 }
 
+// Abre "Mis Notificaciones": muestra al cliente el estado de sus reservas (pendiente, aceptada, rechazada) y su acta/QR si corresponde.
 async function abrirBandejaCliente() {
     try {
         const todas = await api('/api/mis-reservas');
@@ -1263,6 +1352,9 @@ async function abrirBandejaCliente() {
 // =====================================================================
 //  CATÁLOGO Y RESERVA VIRTUAL
 // =====================================================================
+// CARGA EL CATÁLOGO: pide los instrumentos al servidor y crea una tarjeta por cada uno dentro de #grid-instrumentos.
+// Aquí se decide el badge (Disponible / Ocupado / En reparación) y el botón Reservar.
+// Para cambiar lo que dice o muestra cada tarjeta, edita el HTML dentro de card.innerHTML.
 async function cargarCatalogo() {
     const grid = $('grid-instrumentos');
     if (!grid) return;
@@ -1308,7 +1400,7 @@ async function cargarCatalogo() {
 <p><strong>Modelo:</strong> ${esc(item.modelo || '—')}</p>
 <p><strong>Serie:</strong> ${esc(item.numero_serie)}</p>
 <p><strong>Estado físico:</strong> ${esc(item.estado_fisico)}</p>
-<p><strong>Disponibilidad:</strong> ${badge}</p>s
+<p><strong>Disponibilidad:</strong> ${badge}</p>
                     </div>
                     ${boton}
                 </div>
@@ -1320,6 +1412,7 @@ async function cargarCatalogo() {
     }
 }
 
+// Botón "Reservar": si el usuario no inició sesión le pide entrar; si sí, abre la ventana de reserva con los datos del instrumento.
 function solicitarReserva(id) {
     const sesion = getSesion();
     if (!sesion || !sesion.usuario) {
@@ -1346,7 +1439,9 @@ function solicitarReserva(id) {
     abrirModal('modal-reserva');
 }
 
+// UTILIDADES DE PAGO CON TARJETA (validación y formato).
 // [pago-utils-inicio]
+// Comprueba que el número de tarjeta sea válido con el algoritmo de Luhn.
 function luhnValido(numero) {
     let suma = 0;
     let alterno = false;
@@ -1359,6 +1454,7 @@ function luhnValido(numero) {
     return suma % 10 === 0;
 }
 
+// Detecta si la tarjeta es Visa, Mastercard, American Express, etc. por sus primeros números.
 function detectarMarca(d) {
     if (/^4/.test(d)) return 'Visa';
     if (/^(5[1-5]|2(2[2-9]|[3-6]\d|7[01]|720))/.test(d)) return 'Mastercard';
@@ -1367,6 +1463,7 @@ function detectarMarca(d) {
 }
 
 // 4-4-4-4 para la mayoría de tarjetas y 4-6-5 para American Express
+// Agrupa el número mientras se escribe (0000 0000 0000 0000).
 function formatearNumeroTarjeta(valor) {
     const d = String(valor).replace(/\D/g, '');
     if (/^3[47]/.test(d)) {
@@ -1377,6 +1474,7 @@ function formatearNumeroTarjeta(valor) {
 }
 // [pago-utils-fin]
 
+// Campos de tarjeta: formatean número, vencimiento (MM/AA) y limitan el CVV mientras la persona escribe.
 const campoNumero = $('tarj-numero');
 if (campoNumero) {
     campoNumero.addEventListener('input', () => {
@@ -1403,6 +1501,7 @@ if (campoCvv) {
     });
 }
 
+// Borra los datos de la tarjeta del formulario después de usarlos.
 function limpiarDatosTarjeta() {
     ['tarj-titular', 'tarj-numero', 'tarj-vence', 'tarj-cvv'].forEach((id) => {
         const el = $(id);
@@ -1415,6 +1514,7 @@ function limpiarDatosTarjeta() {
 }
 
 // Devuelve el texto del error, o null si la tarjeta es válida
+// Revisa titular, número, vencimiento y CVV; devuelve el mensaje de error o null si todo está bien.
 function validarTarjeta() {
     const titular = ($('tarj-titular')?.value || '').trim();
     const numLimpio = ($('tarj-numero')?.value || '').replace(/\D/g, '');
@@ -1442,6 +1542,7 @@ function validarTarjeta() {
     return null;
 }
 
+// Alterna entre pagar con tarjeta o con QR (muestra/oculta las cajas correspondientes).
 function cambiarMetodoPago() {
     const esQr = $('res-metodo-pago').value === 'qr';
     $('pago-tarjeta').hidden = esQr;
@@ -1450,6 +1551,7 @@ function cambiarMetodoPago() {
 }
 
 // Muestra el QR que subió el administrador (o el archivo qr.png del proyecto)
+// Carga la imagen del QR de pagos para mostrarla al cliente.
 function cargarQrPago() {
     const img = $('qr-pago-img');
     const aviso = $('qr-pago-aviso');
@@ -1471,7 +1573,9 @@ function cargarQrPago() {
     img.src = `/api/qr/imagen?t=${Date.now()}`;
 }
 
+// Evita que se envíe dos veces la reserva si se pulsa el botón varias veces.
 let enviandoReserva = false;
+// ENVÍA LA RESERVA al servidor (/api/reservas): valida fechas, datos de pago y adelanto. Muestra un aviso con el resultado.
 async function enviarReservaVirtual(e) {
     e.preventDefault();
     if (enviandoReserva) return;
@@ -1528,6 +1632,7 @@ async function enviarReservaVirtual(e) {
 // =====================================================================
 
 // Reduce la foto (máx. 800 px) para que la base de datos no se llene
+// Reduce la foto a un máximo de 800 px para que la base de datos no se llene.
 function leerImagenRedimensionada(archivo, maximo = 800) {
     return new Promise((resolve, reject) => {
         const lector = new FileReader();
@@ -1549,6 +1654,7 @@ function leerImagenRedimensionada(archivo, maximo = 800) {
     });
 }
 
+// Muestra la vista previa de la foto elegida al registrar un instrumento.
 const inputFoto = $('foto-instrumento');
 if (inputFoto) {
     inputFoto.addEventListener('change', async () => {
@@ -1565,6 +1671,7 @@ if (inputFoto) {
     });
 }
 
+// Al enviar el formulario del Panel 1: valida y envía el nuevo instrumento a /api/instrumentos.
 const formInstrumento = $('form-instrumento');
 if (formInstrumento) {
     formInstrumento.addEventListener('submit', async (e) => {
@@ -1595,6 +1702,7 @@ if (formInstrumento) {
     });
 }
 
+// Pide la lista de instrumentos al servidor para el inventario del admin.
 async function cargarInstrumentos() {
     try {
         const [instrumentos, disp] = await Promise.all([api('/api/instrumentos'), api('/api/disponibilidad')]);
@@ -1603,6 +1711,7 @@ async function cargarInstrumentos() {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+// Dibuja las filas de la tabla de inventario (foto, datos, selector de estado y botones Ver/Editar/Eliminar).
 function renderizarTablaInstrumentos(instrumentos, ocupados) {
     const tbody = $('tabla-instrumentos');
     if (!tbody) return;
@@ -1642,6 +1751,7 @@ function renderizarTablaInstrumentos(instrumentos, ocupados) {
     });
 }
 
+// Abre la ficha con el detalle del instrumento.
 async function verDetalleInstrumento(id) {
     try {
         const [item, disp] = await Promise.all([
@@ -1671,6 +1781,7 @@ async function verDetalleInstrumento(id) {
     }
 }
 
+// Cambia el estado físico de un instrumento desde la tabla.
 async function cambiarEstadoInstrumento(id, estado) {
     try {
         await api(`/api/instrumentos/${id}`, { method: 'PUT', body: { estado_fisico: estado } });
@@ -1680,6 +1791,7 @@ async function cambiarEstadoInstrumento(id, estado) {
     cargarInstrumentos();
 }
 
+// Elimina un instrumento (con doble clic de confirmación).
 async function eliminarInstrumento(id, boton) {
     if (!confirmarClic(boton)) return;
     try {
@@ -1690,8 +1802,10 @@ async function eliminarInstrumento(id, boton) {
     cargarInstrumentos();
 }
 
+// Guarda temporalmente la foto nueva al editar un instrumento.
 let editInstImagenTemp = undefined;
 
+// Vista previa de la nueva foto al editar.
 const inputEditFoto = $('edit-inst-foto');
 if (inputEditFoto) {
     inputEditFoto.addEventListener('change', async () => {
@@ -1716,6 +1830,7 @@ if (inputEditFoto) {
     });
 }
 
+// Abre la ventana de edición con los datos actuales del instrumento ya cargados.
 function abrirEditarInstrumento(id) {
     const item = listaInstrumentosCache.find((i) => Number(i.id) === Number(id));
     if (!item) return;
@@ -1741,6 +1856,7 @@ function abrirEditarInstrumento(id) {
     abrirModal('modal-editar-instrumento');
 }
 
+// Guarda los cambios de la edición (PUT /api/instrumentos/:id).
 async function guardarEdicionInstrumento(e) {
     e.preventDefault();
     const id = Number($('edit-inst-id').value);
@@ -1767,6 +1883,7 @@ async function guardarEdicionInstrumento(e) {
 // =====================================================================
 //  ADMIN: PRÉSTAMOS (CON FIRMA DIGITAL)
 // =====================================================================
+// FIRMA DIGITAL: permite dibujar con mouse o dedo en el lienzo. firmando = está dibujando; firmaVacia = aún no hay firma.
 const canvasFirma = $('canvas-firma');
 let firmando = false;
 let firmaVacia = true;
@@ -1807,14 +1924,17 @@ if (canvasFirma) {
     canvasFirma.addEventListener('pointercancel', terminarTrazo);
 }
 
+// Borra la firma del lienzo.
 function limpiarFirma() {
     if (!canvasFirma) return;
     canvasFirma.getContext('2d').clearRect(0, 0, canvasFirma.width, canvasFirma.height);
     firmaVacia = true;
 }
+// Botón "Borrar firma".
 const btnLimpiarFirma = $('btn-limpiar-firma');
 if (btnLimpiarFirma) btnLimpiarFirma.addEventListener('click', limpiarFirma);
 
+// Llena la lista de instrumentos DISPONIBLES para prestar.
 async function cargarSelectInstrumentosParaPrestamo() {
     const select = $('select-instrumento-prestamo');
     if (!select) return;
@@ -1838,6 +1958,7 @@ async function cargarSelectInstrumentosParaPrestamo() {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+// Al elegir un instrumento, muestra su estado de salida.
 const selectPrestamo = $('select-instrumento-prestamo');
 if (selectPrestamo) {
     selectPrestamo.addEventListener('change', () => {
@@ -1846,6 +1967,7 @@ if (selectPrestamo) {
     });
 }
 
+// REGISTRAR PRÉSTAMO: valida datos, firma y conformidad y los envía a /api/prestamos.
 const formPrestamo = $('form-prestamo');
 if (formPrestamo) {
     formPrestamo.addEventListener('submit', async (e) => {
@@ -1889,6 +2011,7 @@ if (formPrestamo) {
 // =====================================================================
 //  ADMIN: DEVOLUCIONES, CRONÓMETRO Y ACTA
 // =====================================================================
+// Convierte milisegundos a un texto legible (días, horas, minutos, segundos).
 function formatearDuracion(ms) {
     const total = Math.floor(Math.abs(ms) / 1000);
     const d = Math.floor(total / 86400);
@@ -1898,6 +2021,7 @@ function formatearDuracion(ms) {
     return `${d > 0 ? d + 'd ' : ''}${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
+// Actualiza cada segundo el cronómetro y la multa de cada préstamo (verde a tiempo, rojo con retraso).
 function actualizarCronometros() {
     const ahora = Date.now();
     document.querySelectorAll('.cronometro[data-limite]').forEach((td) => {
@@ -1918,6 +2042,7 @@ function actualizarCronometros() {
     });
 }
 
+// Anula un préstamo activo o lo borra del registro.
 async function eliminarPrestamo(id, boton) {
     if (!confirmarClic(boton)) return;
     try {
@@ -1929,6 +2054,7 @@ async function eliminarPrestamo(id, boton) {
     }
 }
 
+// Abre la ventana de devolución del instrumento prestado.
 async function abrirDevolucion(id) {
     const p = prestamosCache.find((x) => x.id === id);
     if (!p) return;
@@ -1952,6 +2078,7 @@ async function abrirDevolucion(id) {
     actualizarPrevisualizacion();
 }
 
+// Calcula y muestra la multa estimada según el retraso y el nivel de daño elegido.
 async function actualizarPrevisualizacion() {
     const id = $('dev-id').value;
     if (!id) return;
@@ -1971,6 +2098,7 @@ async function actualizarPrevisualizacion() {
     }
 }
 
+// CONFIRMA LA DEVOLUCIÓN: guarda el estado final del instrumento y la multa (PUT /api/prestamos/:id/devolver).
 async function confirmarDevolucion(e) {
     e.preventDefault();
     const id = $('dev-id').value;
@@ -1992,6 +2120,7 @@ async function confirmarDevolucion(e) {
     }
 }
 
+// Muestra el acta de entrega del préstamo con la firma.
 async function verActa(id) {
     try {
         const p = await api(`/api/prestamos/${id}`);
@@ -2027,8 +2156,10 @@ async function verActa(id) {
 // =====================================================================
 //  ADMIN: QR DE PAGOS
 // =====================================================================
+// QR DE PAGOS: guarda la foto elegida antes de presionar "Guardar".
 let qrNuevo = null; // foto elegida, todavía sin guardar
 
+// Reduce el tamaño de la imagen del QR (máx. 1000 px).
 function prepararImagenQr(archivo, maximo = 1000) {
     return new Promise((resolve, reject) => {
         if (!archivo.type.startsWith('image/')) return reject(new Error('El archivo no es una imagen.'));
@@ -2055,6 +2186,7 @@ function prepararImagenQr(archivo, maximo = 1000) {
     });
 }
 
+// Actualiza lo que se ve en la ventana del QR (imagen y avisos).
 async function refrescarQrAdmin() {
     try {
         const info = await api('/api/qr');
@@ -2074,6 +2206,7 @@ async function refrescarQrAdmin() {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+// Abre la ventana del QR de pagos.
 async function abrirModalQrAdmin() {
     qrNuevo = null;
     $('qr-archivo').value = '';
@@ -2082,6 +2215,7 @@ async function abrirModalQrAdmin() {
     abrirModal('modal-qr-admin');
 }
 
+// Vista previa al elegir la imagen del QR.
 const inputQr = $('qr-archivo');
 if (inputQr) {
     inputQr.addEventListener('change', async () => {
@@ -2102,6 +2236,7 @@ if (inputQr) {
     });
 }
 
+// Sube y guarda el QR (PUT /api/qr).
 async function guardarQrAdmin() {
     if (!qrNuevo) return;
     try {
@@ -2113,6 +2248,7 @@ async function guardarQrAdmin() {
     } catch (err) { toast(err.message, 'error'); }
 }
 
+// Quita el QR subido (vuelve al archivo qr.png del proyecto si existe).
 async function eliminarQrAdmin(boton) {
     if (!confirmarClic(boton)) return;
     try {
@@ -2122,6 +2258,7 @@ async function eliminarQrAdmin(boton) {
 }
 
 // Pantalla grande para que el cliente escanee en persona
+// Muestra el QR en grande para el pago presencial.
 function mostrarQrEnPantalla() {
     $('qr-pantalla-img').src = `/api/qr/imagen?t=${Date.now()}`;
     abrirModal('modal-qr-pantalla');
@@ -2130,9 +2267,11 @@ function mostrarQrEnPantalla() {
 // =====================================================================
 //  OJITO PARA VER/OCULTAR CONTRASEÑAS
 // =====================================================================
+// Dibujos del ojito (abierto y tachado) para ver u ocultar contraseñas.
 const ICONO_OJO = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const ICONO_OJO_TACHADO = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
+// Muestra u oculta el texto de una contraseña y cambia el icono del ojito.
 function establecerVisibilidad(input, boton, visible) {
     input.type = visible ? 'text' : 'password';
     boton.innerHTML = visible ? ICONO_OJO_TACHADO : ICONO_OJO;
@@ -2140,6 +2279,7 @@ function establecerVisibilidad(input, boton, visible) {
     boton.setAttribute('aria-pressed', String(visible));
 }
 
+// Agrega automáticamente el ojito a todos los campos de contraseña (excepto los que ya lo tienen).
 function agregarBotonesOjo() {
     document.querySelectorAll('input[type="password"]').forEach((input) => {
         if (input.dataset.ojo) return;
@@ -2167,6 +2307,7 @@ function agregarBotonesOjo() {
     });
 }
 
+// Vuelve a ocultar las contraseñas al cerrar una ventana.
 function ocultarPasswords(contenedor) {
     contenedor.querySelectorAll('input[data-ojo]').forEach((input) => { if (input._ocultar) input._ocultar(); });
 }
@@ -2174,6 +2315,7 @@ function ocultarPasswords(contenedor) {
 // =====================================================================
 //  CAMBIAR MI CONTRASEÑA (ADMIN Y USUARIOS)
 // =====================================================================
+// Abre la ventana "Cambiar contraseña" limpia.
 function abrirModalPassword() {
     $('form-password').reset();
     $('pw-mensaje').textContent = '';
@@ -2181,6 +2323,7 @@ function abrirModalPassword() {
     abrirModal('modal-password');
 }
 
+// CAMBIAR CONTRASEÑA: valida que coincidan, mínimo 8 caracteres, y envía a /api/cambiar-password.
 async function cambiarPassword(e) {
     e.preventDefault();
     const mensaje = $('pw-mensaje');
@@ -2207,6 +2350,7 @@ async function cambiarPassword(e) {
 // =====================================================================
 //  DECORACIÓN: NOTAS FLOTANTES E ICONOS POR TIPO
 // =====================================================================
+// Devuelve un emoji según el tipo de instrumento (cuerda, viento, percusión...). Se usa cuando no hay foto.
 function emojiPorTipo(tipo) {
     const t = String(tipo || '').toLowerCase();
     if (/cuerda|guitar|viol|bajo|arpa|ukelele/.test(t)) return '🎸';
@@ -2217,6 +2361,7 @@ function emojiPorTipo(tipo) {
     return '🎵';
 }
 
+// Crea las notas musicales flotantes del fondo.
 function crearNotasDecorativas() {
     const capa = $('decoracion');
     if (!capa || capa.dataset.lista) return;
@@ -2243,6 +2388,7 @@ function crearNotasDecorativas() {
 // =====================================================================
 //  ESCENA NAVIDEÑA DE FONDO Y FOTOS POR DEFECTO
 // =====================================================================
+// Prepara la escena del fondo: crea estrellas, nieve y el efecto parallax con el mouse.
 function inicializarEscenaNavidena() {
     const esDiciembre = new Date().getMonth() === 11;
 
@@ -2301,6 +2447,7 @@ function inicializarEscenaNavidena() {
     inicializarTematicaMes();
 }
 
+// Prepara las partículas y colores especiales del mes actual (cuando no es diciembre).
 function inicializarTematicaMes() {
     const mes = new Date().getMonth() + 1;
     const cont = $('mes-particulas');
@@ -2342,6 +2489,7 @@ function inicializarTematicaMes() {
 
 // Foto por defecto según el nombre o tipo del instrumento (necesita internet;
 // si no carga, se muestra el icono del instrumento)
+// Devuelve una foto por defecto según el nombre o tipo del instrumento (necesita internet).
 function obtenerImagenPorDefecto(nombre, tipo) {
     const n = (nombre + ' ' + tipo).toLowerCase();
     if (n.includes('guitarra')) return 'https://images.unsplash.com/photo-1510915361894-db8b60106cb1?auto=format&fit=crop&w=600&q=80';
@@ -2353,6 +2501,7 @@ function obtenerImagenPorDefecto(nombre, tipo) {
 }
 
 // Si una foto no carga, se cambia por el icono del instrumento
+// Si una foto no carga, la reemplaza por el emoji del instrumento.
 function fotoNoDisponible(img) {
     const bloque = document.createElement('div');
     bloque.className = 'instrument-img sin-foto';
@@ -2364,15 +2513,19 @@ function fotoNoDisponible(img) {
 // =====================================================================
 //  INICIO: RESTAURAR SESIÓN
 // =====================================================================
+// INICIO DE LA APP: si había un aviso guardado (por ejemplo "Tu sesión expiró"), lo muestra.
 const avisoPendiente = sessionStorage.getItem('aviso');
 if (avisoPendiente) {
     sessionStorage.removeItem('aviso');
     toast(avisoPendiente, 'error');
 }
 
+// Pone los ojitos y carga las tarifas al abrir la página.
 agregarBotonesOjo();
 cargarConfig();
 
+// ARRANQUE: al abrir la página decide qué mostrar. Si hay sesión de admin va al panel admin; si hay sesión de cliente al catálogo;
+// si no hay sesión, muestra el login con la lámpara apagada.
 (function iniciarApp() {
     const sesion = getSesion();
     
@@ -2401,8 +2554,10 @@ cargarConfig();
 // =====================================================================
 
 // Leer si el usuario había silenciado la música antes
+// MÚSICA DEL CATÁLOGO: recuerda si el usuario la silenció (guardado en el navegador).
 let musicaSilenciada = localStorage.getItem('musica_silenciada') === 'true';
 
+// Inicia la música de fondo del catálogo (si no está silenciada).
 function iniciarMusicaCatalogo() {
     const audio = $('audioFondoCatalogo');
     if (!audio) return;
@@ -2421,12 +2576,14 @@ function iniciarMusicaCatalogo() {
     }
 }
 
+// Detiene la música del catálogo.
 function detenerMusicaCatalogo() {
     const audio = $('audioFondoCatalogo');
     if (!audio) return;
     audio.pause();
 }
 
+// Pausa los audios cuando la pestaña queda en segundo plano.
 function pausarTodoAudioSegundoPlano() {
     try {
         if (typeof audioLampara !== 'undefined' && audioLampara && !audioLampara.paused) {
@@ -2442,6 +2599,7 @@ function pausarTodoAudioSegundoPlano() {
     } catch (e) {}
 }
 
+// Reanuda la música cuando vuelves a la pestaña.
 function reanudarAudioSiCorresponde() {
     if (document.hidden) return;
     const vistaCat = $('vista-catalogo');
@@ -2451,6 +2609,7 @@ function reanudarAudioSiCorresponde() {
     }
 }
 
+// Detecta cuándo la pestaña se oculta o vuelve a verse para pausar o reanudar el audio.
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         pausarTodoAudioSegundoPlano();
@@ -2459,8 +2618,10 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
+// Pausa los audios al cerrar o salir de la página.
 window.addEventListener('pagehide', pausarTodoAudioSegundoPlano);
 
+// Botón de música del catálogo: silencia o activa y guarda la preferencia.
 function toggleMusicaCatalogo() {
     const audio = $('audioFondoCatalogo');
     if (!audio) return;
@@ -2477,6 +2638,7 @@ function toggleMusicaCatalogo() {
     }
 }
 
+// Cambia el icono de bocina (sonido / silencio).
 function actualizarIconosBocina(silenciado) {
     const iconoOn = document.querySelector('.catalog-sound-on');
     const iconoOff = document.querySelector('.catalog-sound-off');
@@ -2485,6 +2647,7 @@ function actualizarIconosBocina(silenciado) {
 }
 
 // MAGIA PURA: En cuanto recargues (F5) y hagas un solo clic en cualquier parte, la música arranca sola
+// Los navegadores bloquean el audio automático: con el primer clic en cualquier parte, la música arranca.
 document.addEventListener('click', function desbloquearAudioCatalogo() {
     const audio = $('audioFondoCatalogo');
     const vistaCat = $('vista-catalogo');
@@ -2500,6 +2663,7 @@ document.addEventListener('click', function desbloquearAudioCatalogo() {
 // =====================================================================
 //  PERFIL DE USUARIO Y 10 AVATARES
 // =====================================================================
+// Genera un avatar dibujado (SVG) con colores y estilo.
 function crearAvatarSvgDataUrl(bgInicio, bgFin, acento, estilo = 0) {
     const accesorios = [
         `<circle cx="32" cy="24" r="11" fill="#fde68a"/><path d="M14 54c1-11 8-17 18-17s17 6 18 17" fill="#ffffff"/>`,
@@ -2526,21 +2690,25 @@ function crearAvatarSvgDataUrl(bgInicio, bgFin, acento, estilo = 0) {
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+// LOS 10 AVATARES de la galería (id, nombre y colores). Para cambiar colores o nombres de avatares edita esta lista;
+// los IDs (av-1 a av-10) deben coincidir con AVATARES_VALIDOS de server.js.
 const AVATARES_DISPONIBLES = [
-    { id: 'av-1', nombre: 'Ámbar', src: crearAvatarSvgDataUrl('#f59e0b', '#ea580c', '#ea580c', 0) },
-    { id: 'av-2', nombre: 'Cielo', src: crearAvatarSvgDataUrl('#0ea5e9', '#2563eb', '#2563eb', 1) },
-    { id: 'av-3', nombre: 'Coral', src: crearAvatarSvgDataUrl('#f43f5e', '#db2777', '#db2777', 2) },
-    { id: 'av-4', nombre: 'Esmeralda', src: crearAvatarSvgDataUrl('#10b981', '#059669', '#059669', 3) },
-    { id: 'av-5', nombre: 'Lila', src: crearAvatarSvgDataUrl('#8b5cf6', '#6d28d9', '#6d28d9', 4) },
-    { id: 'av-6', nombre: 'Sol', src: crearAvatarSvgDataUrl('#eab308', '#d97706', '#d97706', 5) },
-    { id: 'av-7', nombre: 'Turquesa', src: crearAvatarSvgDataUrl('#06b6d4', '#0284c7', '#0284c7', 6) },
-    { id: 'av-8', nombre: 'Rubí', src: crearAvatarSvgDataUrl('#ef4444', '#b91c1c', '#b91c1c', 7) },
-    { id: 'av-9', nombre: 'Menta', src: crearAvatarSvgDataUrl('#34d399', '#0d9488', '#0d9488', 8) },
-    { id: 'av-10', nombre: 'Índigo', src: crearAvatarSvgDataUrl('#6366f1', '#4338ca', '#4338ca', 9) }
+    { id: 'av-1', nombre: '', src: crearAvatarSvgDataUrl('#f59e0b', '#ea580c', '#ea580c', 0) },
+    { id: 'av-2', nombre: '', src: crearAvatarSvgDataUrl('#0ea5e9', '#2563eb', '#2563eb', 1) },
+    { id: 'av-3', nombre: '', src: crearAvatarSvgDataUrl('#f43f5e', '#db2777', '#db2777', 2) },
+    { id: 'av-4', nombre: '', src: crearAvatarSvgDataUrl('#10b981', '#059669', '#059669', 3) },
+    { id: 'av-5', nombre: '', src: crearAvatarSvgDataUrl('#8b5cf6', '#6d28d9', '#6d28d9', 4) },
+    { id: 'av-6', nombre: '', src: crearAvatarSvgDataUrl('#eab308', '#d97706', '#d97706', 5) },
+    { id: 'av-7', nombre: '', src: crearAvatarSvgDataUrl('#06b6d4', '#0284c7', '#0284c7', 6) },
+    { id: 'av-8', nombre: '', src: crearAvatarSvgDataUrl('#ef4444', '#b91c1c', '#b91c1c', 7) },
+    { id: 'av-9', nombre: '', src: crearAvatarSvgDataUrl('#34d399', '#0d9488', '#0d9488', 8) },
+    { id: 'av-10', nombre: '', src: crearAvatarSvgDataUrl('#6366f1', '#4338ca', '#4338ca', 9) }
 ];
 
+// Avatar elegido, todavía sin guardar.
 let avatarSeleccionadoTemp = null;
 
+// Devuelve la imagen que corresponde al usuario (selfie, avatar elegido o uno por defecto).
 function obtenerAvatarUsuario(usuario) {
     // La foto de perfil y el avatar elegido viven en el servidor (junto al usuario),
     // así que se ven igual sin importar desde qué celular o computadora entres.
@@ -2551,6 +2719,7 @@ function obtenerAvatarUsuario(usuario) {
     return AVATARES_DISPONIBLES.find((a) => a.id === guardadoId) || AVATARES_DISPONIBLES[0];
 }
 
+// Dibuja la galería de avatares en el perfil.
 function renderizarGaleriaAvatares() {
     const grid = $('perfil-galeria-avatares');
     if (!grid) return;
@@ -2577,6 +2746,7 @@ function renderizarGaleriaAvatares() {
     });
 }
 
+// Muestra los datos del usuario en el perfil (nombre, correo, CI, teléfono, código de cliente).
 function pintarDatosPerfil(u) {
     const datosEl = $('perfil-datos-lista');
     if (!datosEl) return;
@@ -2590,6 +2760,7 @@ function pintarDatosPerfil(u) {
     `;
 }
 
+// Abre la ventana del perfil con datos y avatar.
 function abrirModalPerfil() {
     const sesion = getSesion();
     if (!sesion || !sesion.usuario) {
@@ -2626,6 +2797,7 @@ function abrirModalPerfil() {
     }).catch(() => {});
 }
 
+// Guarda el avatar elegido (POST /api/mi-perfil/avatar).
 async function guardarAvatarPerfil() {
     const sesion = getSesion();
     if (!sesion || !sesion.usuario || !avatarSeleccionadoTemp) return;
@@ -2651,8 +2823,10 @@ async function guardarAvatarPerfil() {
 // =====================================================================
 //  SELFIE CON LA CÁMARA
 // =====================================================================
+// SELFIE: guarda el flujo de la cámara mientras está abierta.
 let streamCamara = null;
 
+// Pide permiso y enciende la cámara del dispositivo.
 async function abrirCamara() {
     const aviso = $('camara-aviso');
     const btnTomar = $('btn-camara-capturar');
@@ -2680,6 +2854,7 @@ async function abrirCamara() {
     }
 }
 
+// Apaga la cámara.
 function detenerCamara() {
     if (streamCamara) {
         streamCamara.getTracks().forEach((t) => t.stop());
@@ -2689,12 +2864,14 @@ function detenerCamara() {
     if (video) video.srcObject = null;
 }
 
+// Cierra la ventana de la cámara y apaga la cámara.
 function cerrarCamara() {
     detenerCamara();
     cerrarModal('modal-camara');
 }
 
 // Recorta el centro de la imagen en un cuadrado de 480x480 y lo convierte a JPEG liviano
+// Recorta el centro de la imagen en un cuadrado de 480x480 y lo convierte a JPEG liviano.
 function recortarCuadrado(fuente, ancho, alto) {
     const lado = Math.min(ancho, alto);
     const canvas = document.createElement('canvas');
@@ -2704,6 +2881,7 @@ function recortarCuadrado(fuente, ancho, alto) {
     return canvas.toDataURL('image/jpeg', 0.85);
 }
 
+// Sube la selfie al servidor (POST /api/mi-perfil/foto).
 async function guardarSelfie(dataUrl) {
     const sesion = getSesion();
     if (!sesion || !sesion.usuario) return;
@@ -2726,6 +2904,7 @@ async function guardarSelfie(dataUrl) {
     }
 }
 
+// Toma la foto con la cámara y la guarda como foto de perfil.
 function tomarFoto() {
     const video = $('camara-video');
     if (!video || !video.videoWidth) {
@@ -2736,6 +2915,7 @@ function tomarFoto() {
     cerrarCamara();
 }
 
+// Permite subir una foto desde el equipo en lugar de usar la cámara.
 function subirFotoArchivo(e) {
     const archivo = e.target.files && e.target.files[0];
     e.target.value = '';
@@ -2760,10 +2940,13 @@ function subirFotoArchivo(e) {
 // =====================================================================
 //  CREDENCIAL DEL CLIENTE (imagen PNG descargable)
 // =====================================================================
+// CREDENCIAL: guarda la imagen generada y el nombre del archivo a descargar.
 let credencialDataUrl = '';
 let credencialNombreArchivo = 'credencial.png';
+// Tipo de letra usado dentro de la imagen de la credencial.
 const FUENTE_CREDENCIAL = '"Segoe UI", Roboto, Arial, sans-serif';
 
+// Carga una imagen y espera a que esté lista para dibujarla.
 function cargarImagen(src) {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -2775,6 +2958,7 @@ function cargarImagen(src) {
 }
 
 // Reduce la letra (y si hace falta recorta con "…") para que el texto quepa en el ancho dado
+// Reduce el tamaño de letra o recorta con "…" para que el texto quepa en el ancho dado.
 function ajustarTexto(ctx, texto, anchoMax, tamInicial, tamMin, peso) {
     let tam = tamInicial;
     ctx.font = `${peso} ${tam}px ${FUENTE_CREDENCIAL}`;
@@ -2789,6 +2973,7 @@ function ajustarTexto(ctx, texto, anchoMax, tamInicial, tamMin, peso) {
     return t;
 }
 
+// Dibuja un rectángulo con esquinas redondeadas en el lienzo.
 function rectRedondeado(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -2799,6 +2984,7 @@ function rectRedondeado(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
+// DIBUJA LA CREDENCIAL en un canvas: colores, textos, foto y código de cliente. Aquí se cambia el diseño de la credencial.
 function dibujarCredencial(u, foto) {
     const W = 640;
     const H = 1000;
@@ -2921,6 +3107,7 @@ function dibujarCredencial(u, foto) {
     return canvas;
 }
 
+// Genera y muestra la credencial del cliente.
 async function abrirCredencial() {
     let sesion = getSesion();
     if (!sesion || !sesion.usuario) {
@@ -2953,6 +3140,7 @@ async function abrirCredencial() {
     abrirModal('modal-credencial');
 }
 
+// Descarga la credencial como imagen PNG.
 function descargarCredencial() {
     if (!credencialDataUrl) return;
     const a = document.createElement('a');
@@ -2967,6 +3155,7 @@ function descargarCredencial() {
 // =====================================================================
 //  "OLVIDÉ MI CONTRASEÑA" (verificando tu identidad, no por enlace de correo)
 // =====================================================================
+// OLVIDÉ MI CONTRASEÑA: envía correo, nombre, CI y teléfono; si coinciden, muestra una contraseña temporal.
 async function enviarOlvidePassword(e) {
     e.preventDefault();
     const cuerpo = {
@@ -2985,6 +3174,7 @@ async function enviarOlvidePassword(e) {
     }
 }
 
+// Copia la contraseña temporal al portapapeles.
 function copiarPasswordTemporal() {
     const texto = $('password-temporal-valor').textContent;
     navigator.clipboard.writeText(texto)
@@ -2992,6 +3182,7 @@ function copiarPasswordTemporal() {
         .catch(() => toast('No se pudo copiar. Cópiala a mano.', 'error'));
 }
 
+// Cierra las ventanas y deja listo el login para entrar con la contraseña temporal.
 function irALoginConPasswordTemporal() {
     cerrarModal('modal-password-temporal');
     const email = $('olvide-email') ? $('olvide-email').value : '';

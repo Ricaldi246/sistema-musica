@@ -1,21 +1,33 @@
+// ARCHIVO: server.js (el servidor / backend)
+// Se ejecuta con "node server.js". Entrega la página web (index.html, script.js, style.css) y atiende las rutas /api/...
+// que usa script.js: login, instrumentos, reservas, préstamos, QR de pagos e historial.
+// Guarda y lee todo en Supabase (conexión en supabase.js). Las claves secretas están en el archivo .env.
+// Conexión a la base de datos (archivo supabase.js).
 const supabase = require('./supabase');
+// Express: la herramienta que crea el servidor web y las rutas /api/...
 const express = require('express');
 const path = require('path');
+// Herramientas de seguridad incluidas en Node (cifrado de contraseñas y tokens).
 const crypto = require('crypto');
 const fs = require('fs');
 
 // nodemailer es opcional: hasta que no hagas "npm install nodemailer" y configures el
 // SMTP en el .env, "Olvidé mi contraseña" sigue funcionando, solo que no envía el correo
 // (el enlace queda escrito en esta consola, para que puedas probarlo tú mismo).
+// Envío de correos (opcional): si nodemailer no está instalado, el sistema sigue funcionando sin enviar emails.
 let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch (_) { /* aún no instalado */ }
 
+// Crea la aplicación del servidor.
 const app = express();
+// Puerto del servidor (3000 por defecto). Para abrir la página usa http://localhost:3000
 const PORT = process.env.PORT || 3000;
 
 // =====================================================================
 //  CONFIGURACIÓN DE TARIFAS  (cámbialas a tu gusto)
 // =====================================================================
+// TARIFAS Y PRECIOS (cámbialos aquí): moneda, multa por día de retraso, horas de gracia, tope de multa por retraso,
+// adelanto de la reserva y escala de multas por daño (Leve, Moderado, Grave, Pérdida). El navegador los lee con /api/config.
 const CONFIG = {
     moneda: 'Bs',
     tarifaRetrasoPorDia: 10,      // cobro por cada día de retraso (o fracción)
@@ -30,13 +42,18 @@ const CONFIG = {
         'Pérdida': 500
     }
 };
+// Estados físicos permitidos de un instrumento y tipos de solicitante permitidos. Si agregas uno nuevo, agrégalo también en index.html y script.js.
 const ESTADOS_FISICOS = ['Óptimo', 'Desgaste regular', 'En reparación'];
 const TIPOS_SOLICITANTE = ['Alumno', 'Profesor', 'Persona común'];
 
+// Permite recibir datos JSON (hasta 10 MB, por las fotos en base64).
 app.use(express.json({ limit: '10mb' }));
 
 // Si existe la carpeta "frontend" se sirve entera. Si todos tus archivos están juntos en una
 // sola carpeta, solo se publican los archivos del sitio (NUNCA server.js ni supabase.js).
+// PUBLICACIÓN DE LA PÁGINA: si existe una carpeta "frontend" se publica completa; si no, solo se publican los archivos del sitio
+// (index.html, script.js, style.css y los audios). server.js y supabase.js nunca se publican, así se protegen tus claves.
+// Si cambias el nombre de los audios (navidad.mp3 / navidad2.mp3), cámbialos también en la lista de abajo.
 const DIR_FRONTEND = path.join(__dirname, 'frontend');
 const HAY_CARPETA_FRONTEND = fs.existsSync(path.join(DIR_FRONTEND, 'index.html'));
 const DIR_PUBLICO = HAY_CARPETA_FRONTEND ? DIR_FRONTEND : __dirname;
@@ -56,7 +73,9 @@ if (HAY_CARPETA_FRONTEND) {
 // =====================================================================
 // Hora "de pared" de la academia (por defecto La Paz). Así el servidor funciona igual
 // aunque esté alojado en otro país (Render, Railway, etc. usan hora UTC).
+// Zona horaria de la academia (La Paz por defecto). Se puede cambiar con la variable APP_TZ en .env.
 const ZONA_HORARIA = process.env.APP_TZ || 'America/La_Paz';
+// Devuelve la fecha y hora actual en la zona horaria de la academia.
 function ahoraLocal() {
     const partes = new Intl.DateTimeFormat('en-CA', {
         timeZone: ZONA_HORARIA,
@@ -67,8 +86,10 @@ function ahoraLocal() {
     return `${g('year')}-${g('month')}-${g('day')}T${g('hour')}:${g('minute')}`;
 }
 
+// Comprueba que un texto sea una fecha válida.
 const fechaValida = (f) => typeof f === 'string' && f.length >= 16 && !isNaN(new Date(f).getTime());
 
+// Guarda una línea en el HISTORIAL (quién hizo qué y cuándo).
 async function registrarMovimiento(tipo, descripcion, detalles = '') {
     try {
         // supabase NO lanza excepciones: devuelve { error }, por eso se revisa aquí
@@ -87,6 +108,7 @@ async function registrarMovimiento(tipo, descripcion, detalles = '') {
 // Código de cliente: único para cada usuario y con aspecto aleatorio (ej. AM-7K3Q9X).
 // Se calcula a partir del ID con una operación que nunca repite resultados, así no hace
 // falta guardar nada nuevo en la base de datos y dos usuarios jamás tendrán el mismo código.
+// Genera el código único del cliente (ej. AM-7K3Q9X) a partir de su ID, sin guardar nada extra.
 function codigoCliente(id) {
     const TOTAL = 36 ** 6; // 2,176,782,336 combinaciones
     const numero = Number(id);
@@ -99,6 +121,7 @@ function codigoCliente(id) {
     return 'AM-' + crypto.createHash('sha256').update(String(id)).digest('hex').slice(0, 6).toUpperCase();
 }
 
+// Datos del usuario que SÍ se envían al navegador (nunca la contraseña).
 const usuarioPublico = (u) => ({
     id: u.id,
     nombre: u.nombre,
@@ -112,10 +135,13 @@ const usuarioPublico = (u) => ({
 });
 
 // Mismos 10 IDs que ofrece la galería del frontend, para no aceptar cualquier texto.
+// Los 10 avatares permitidos. Deben coincidir con la galería de script.js.
 const AVATARES_VALIDOS = ['av-1', 'av-2', 'av-3', 'av-4', 'av-5', 'av-6', 'av-7', 'av-8', 'av-9', 'av-10'];
 
 // Sube una imagen en base64 (lo que manda el navegador) a Supabase Storage y devuelve su URL pública
+// Nombre de la carpeta (bucket) de Supabase Storage donde se guardan las fotos.
 const BUCKET_FOTOS = process.env.SUPABASE_BUCKET_FOTOS || 'academia-fotos';
+// Sube una imagen a Supabase Storage y devuelve su dirección pública.
 async function subirImagenBase64(dataUrl, carpeta, nombreFijo) {
     const m = /^data:image\/(png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=]+)$/i.exec(String(dataUrl || ''));
     if (!m) throw Object.assign(new Error('La imagen no es válida.'), { status: 400 });
@@ -138,12 +164,15 @@ async function subirImagenBase64(dataUrl, carpeta, nombreFijo) {
 }
 
 // Contraseñas cifradas con scrypt (viene incluido en Node, no hay que instalar nada)
+// Cifra la contraseña con scrypt antes de guardarla (así nadie puede leerla).
 function hashPassword(password) {
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.scryptSync(password, salt, 64).toString('hex');
     return `${salt}:${hash}`;
 }
+// Detecta si una contraseña guardada ya está cifrada.
 const esHash = (guardado) => /^[0-9a-f]{32}:[0-9a-f]{128}$/.test(guardado || '');
+// Compara la contraseña escrita con la cifrada guardada.
 function verificarPassword(password, guardado) {
     if (!guardado) return false;
     if (!esHash(guardado)) return password === guardado;
@@ -155,19 +184,23 @@ function verificarPassword(password, guardado) {
 
 // Las sesiones viven en la tabla "sesiones" de Supabase (no en memoria), así que
 // si reinicias el servidor, nadie pierde su sesión iniciada.
+// SESIONES: duración de la sesión iniciada (8 horas). Cambia el 8 para más o menos tiempo.
 const DURACION_SESION = 8 * 60 * 60 * 1000;
 
 // Límite de intentos de login (frena el que prueba contraseñas una y otra vez)
+// PROTECCIÓN CONTRA ADIVINAR CONTRASEÑAS: máximo de intentos (MAX_INTENTOS_LOGIN = 8) en una ventana de tiempo (15 minutos).
 const intentosLogin = new Map();
 const MAX_INTENTOS_LOGIN = 8;
 const VENTANA_LOGIN = 15 * 60 * 1000;
 const claveIntento = (req, email) => `${req.ip}|${email}`;
+// Revisa si esa persona ya agotó sus intentos de login.
 function loginBloqueado(clave) {
     const r = intentosLogin.get(clave);
     if (!r) return false;
     if (Date.now() - r.desde > VENTANA_LOGIN) { intentosLogin.delete(clave); return false; }
     return r.cuenta >= MAX_INTENTOS_LOGIN;
 }
+// Suma un intento fallido de login.
 function registrarFalloLogin(clave) {
     const r = intentosLogin.get(clave);
     if (!r || Date.now() - r.desde > VENTANA_LOGIN) intentosLogin.set(clave, { cuenta: 1, desde: Date.now() });
@@ -182,12 +215,14 @@ setInterval(() => {
     for (const [k, r] of intentosLogin) if (ahora - r.desde > VENTANA_LOGIN) intentosLogin.delete(k);
 }, 10 * 60 * 1000).unref();
 
+// Convierte el token de sesión en un código cifrado para guardarlo.
 function hashToken(token) {
     return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 // Guarda la sesión en Supabase (solo el "hash" del token, nunca el token en texto plano)
 // y le entrega al navegador el token real, que es el único lugar donde existe completo.
+// Crea la sesión en Supabase y entrega el token al navegador.
 async function crearSesion(usuario) {
     const token = crypto.randomBytes(32).toString('hex');
     const { error } = await supabase.from('sesiones').insert([{
@@ -201,6 +236,7 @@ async function crearSesion(usuario) {
     return token;
 }
 
+// GUARDIA DE RUTAS: comprueba que quien llama tenga una sesión válida. Se usa en las rutas privadas.
 async function autenticar(req, res, next) {
     const cabecera = req.headers.authorization || '';
     const token = cabecera.startsWith('Bearer ') ? cabecera.slice(7) : null;
@@ -223,6 +259,7 @@ async function autenticar(req, res, next) {
     }
 }
 
+// GUARDIA: solo deja pasar a administradores.
 function soloAdmin(req, res, next) {
     if (req.usuario.tipo !== 'admin') {
         return res.status(403).json({ error: 'Esta acción es solo para el administrador.' });
@@ -230,6 +267,7 @@ function soloAdmin(req, res, next) {
     next();
 }
 
+// Envoltura que captura errores de las rutas para que el servidor no se caiga.
 const ruta = (fn) => (req, res) => {
     Promise.resolve(fn(req, res)).catch((err) => {
         console.error(err);
@@ -238,6 +276,7 @@ const ruta = (fn) => (req, res) => {
 };
 
 // Calcula multa por retraso (por día, con tope) + multa por daño (según escala)
+// CALCULA LA MULTA: por retraso (por día, con horas de gracia y tope) + por daño según la escala de CONFIG.
 function calcularMulta(fechaLimite, fechaReal, nivelDano) {
     const ms = new Date(fechaReal).getTime() - new Date(fechaLimite).getTime();
     const horasRetraso = ms > 0 ? ms / 3600000 : 0;
@@ -257,12 +296,14 @@ function calcularMulta(fechaLimite, fechaReal, nivelDano) {
     };
 }
 
+// Revisa si dos horarios se cruzan.
 function haySolape(inicioA, finA, inicioB, finB) {
     return new Date(inicioA).getTime() < new Date(finB).getTime() &&
            new Date(finA).getTime() > new Date(inicioB).getTime();
 }
 
 // Revisa que el instrumento no esté ocupado en ese horario
+// Revisa que el instrumento no esté ocupado o reservado en ese horario.
 async function hayConflicto(instrumentoId, salida, limite, excluirReservaId = 0) {
     const { data: activos, error: errAct } = await supabase
         .from('prestamos')
@@ -300,6 +341,7 @@ async function hayConflicto(instrumentoId, salida, limite, excluirReservaId = 0)
     return null;
 }
 
+// Al iniciar el servidor, crea la cuenta del administrador si aún no existe.
 async function asegurarAdminInicial() {
     const emailAdmin = String(
         process.env.ADMIN_EMAIL || 'admin@academia.com'
@@ -339,6 +381,7 @@ async function asegurarAdminInicial() {
 // =====================================================================
 //  AUTENTICACIÓN
 // =====================================================================
+// RUTA: registro de nuevo usuario (valida datos, cifra la contraseña y envía el correo de confirmación).
 app.post('/api/registro', ruta(async (req, res) => {
     const nombre = String(req.body.nombre || '').trim();
     const email = String(req.body.email || '').trim().toLowerCase();
@@ -388,6 +431,7 @@ app.post('/api/registro', ruta(async (req, res) => {
 }));
 
 // Confirma la cuenta cuando el usuario abre el enlace del correo
+// RUTA: confirma la cuenta cuando se abre el enlace del correo.
 app.post('/api/verificar-correo', ruta(async (req, res) => {
     const token = String(req.body.token || '');
     if (!token) return res.status(400).json({ error: 'Enlace no válido.' });
@@ -407,6 +451,7 @@ app.post('/api/verificar-correo', ruta(async (req, res) => {
 }));
 
 // Por si el correo no llegó o se perdió el enlace
+// RUTA: reenvía el correo de confirmación.
 app.post('/api/reenviar-verificacion', ruta(async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase();
     const mensajeGenerico = { mensaje: 'Si ese correo está registrado y aún no se confirmó, te reenviamos el enlace de verificación.' };
@@ -424,6 +469,7 @@ app.post('/api/reenviar-verificacion', ruta(async (req, res) => {
 }));
 
 // Procesa los botones "Sí, soy yo / Aceptar" y "No, no soy yo / Rechazar" del correo
+// RUTA: procesa los botones "Sí, soy yo" / "No, no soy yo" que llegan por correo al iniciar sesión.
 app.get('/api/autorizar-login', ruta(async (req, res) => {
     const token = String(req.query.token || '').trim();
     const accion = String(req.query.accion || '').trim().toLowerCase();
@@ -484,6 +530,7 @@ app.get('/api/autorizar-login', ruta(async (req, res) => {
     `);
 }));
 
+// RUTA: INICIO DE SESIÓN. Verifica correo y contraseña, controla los intentos y crea la sesión o pide autorización por correo.
 app.post('/api/login', ruta(async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
@@ -535,6 +582,7 @@ app.post('/api/login', ruta(async (req, res) => {
 }));
 
 // Consulta el estado ("pendiente", "aprobado" o "rechazado") mientras el usuario está en el login
+// RUTA: consulta si el inicio de sesión fue aprobado, rechazado o sigue pendiente.
 app.post('/api/estado-autorizacion', ruta(async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
@@ -590,12 +638,14 @@ app.post('/api/estado-autorizacion', ruta(async (req, res) => {
     });
 }));
 
+// RUTA: cierra la sesión.
 app.post('/api/logout', autenticar, ruta(async (req, res) => {
     await supabase.from('sesiones').delete().eq('token_hash', req.tokenHash);
     res.json({ mensaje: 'Sesión cerrada' });
 }));
 
 // Datos actualizados del usuario que tiene la sesión abierta (incluye su código de cliente)
+// RUTA: datos actuales del usuario con sesión.
 app.get('/api/mi-perfil', autenticar, ruta(async (req, res) => {
     const { data: usuario, error } = await supabase
         .from('usuarios')
@@ -608,6 +658,7 @@ app.get('/api/mi-perfil', autenticar, ruta(async (req, res) => {
 }));
 
 // Sube la selfie o la foto elegida y la deja como foto de perfil (reemplaza la anterior)
+// RUTA: guarda la selfie o foto de perfil.
 app.post('/api/mi-perfil/foto', autenticar, ruta(async (req, res) => {
     const foto_url = await subirImagenBase64(req.body.imagen, 'perfiles', String(req.usuario.id));
     const { error } = await supabase.from('usuarios').update({ foto_url }).eq('id', req.usuario.id);
@@ -616,6 +667,7 @@ app.post('/api/mi-perfil/foto', autenticar, ruta(async (req, res) => {
 }));
 
 // Elige uno de los 10 avatares de la galería (y deja de usar la selfie, si tenía una)
+// RUTA: guarda el avatar elegido.
 app.post('/api/mi-perfil/avatar', autenticar, ruta(async (req, res) => {
     const avatar_id = String(req.body.avatar_id || '');
     if (!AVATARES_VALIDOS.includes(avatar_id)) {
@@ -631,6 +683,7 @@ app.post('/api/mi-perfil/avatar', autenticar, ruta(async (req, res) => {
     res.json(usuarioPublico(usuario));
 }));
 
+// Arma y envía el correo con los botones de aceptar / rechazar. Aquí se cambia el texto o diseño de ese correo.
 async function enviarCorreoVerificacion(destino, nombre, enlaceAceptar, enlaceRechazar) {
     const remitente = process.env.SMTP_FROM || process.env.SMTP_USER;
     const asunto = 'Autorización de acceso - Academia de Música';
@@ -685,6 +738,7 @@ async function enviarCorreoVerificacion(destino, nombre, enlaceAceptar, enlaceRe
     });
 }
 
+// Envía el correo de confirmación al registrarse.
 async function enviarVerificacionANuevoUsuario(req, usuario) {
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = hashToken(token);
@@ -714,10 +768,12 @@ async function enviarVerificacionANuevoUsuario(req, usuario) {
     }
 }
 
+// Revisa si el correo (SMTP) está configurado en .env.
 function smtpConfigurado() {
     return !!(nodemailer && process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+// Envía por correo la contraseña temporal.
 async function enviarCorreoPasswordTemporal(destino, nombre, passwordTemporal) {
     const transportador = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -740,6 +796,7 @@ async function enviarCorreoPasswordTemporal(destino, nombre, passwordTemporal) {
 }
 
 // Sin letras ni números que se confunden entre sí (0/O, 1/l/I), para que sea fácil de copiar a mano.
+// Genera una contraseña temporal al azar, sin caracteres que se confunden (0/O, 1/l/I).
 function generarPasswordTemporal() {
     const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     let p = '';
@@ -750,6 +807,7 @@ function generarPasswordTemporal() {
 // Recuperar contraseña verificando la IDENTIDAD de la persona (no un enlace de correo):
 // debe escribir el correo, el nombre completo, el CI y el teléfono TAL COMO los registró.
 // Si todo coincide, se genera una contraseña temporal nueva y se muestra en pantalla.
+// RUTA: recuperar contraseña verificando correo, nombre, CI y teléfono.
 app.post('/api/recuperar-password', ruta(async (req, res) => {
     const email = String(req.body.email || '').trim().toLowerCase();
     const nombre = String(req.body.nombre || '').trim().toLowerCase();
@@ -797,6 +855,7 @@ app.post('/api/recuperar-password', ruta(async (req, res) => {
     });
 }));
 
+// RUTA: cambiar la contraseña estando con sesión.
 app.post('/api/cambiar-password', autenticar, ruta(async (req, res) => {
     const actual = String(req.body.actual || '');
     const nueva = String(req.body.nueva || '');
@@ -827,11 +886,13 @@ app.post('/api/cambiar-password', autenticar, ruta(async (req, res) => {
     res.json({ mensaje: 'Contraseña actualizada' });
 }));
 
+// RUTA: entrega las tarifas (CONFIG) al navegador.
 app.get('/api/config', (req, res) => res.json(CONFIG));
 
 // =====================================================================
 //  INSTRUMENTOS
 // =====================================================================
+// RUTA: lista pública de instrumentos (la usa el catálogo).
 app.get('/api/instrumentos', ruta(async (req, res) => {
     const { data, error } = await supabase
         .from('instrumentos')
@@ -841,6 +902,7 @@ app.get('/api/instrumentos', ruta(async (req, res) => {
     res.json(data || []);
 }));
 
+// RUTA: detalle de un instrumento.
 app.get('/api/instrumentos/:id', autenticar, ruta(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -858,6 +920,7 @@ app.get('/api/instrumentos/:id', autenticar, ruta(async (req, res) => {
     res.json(data);
 }));
 
+// RUTA: indica qué instrumentos están ocupados ahora.
 app.get('/api/disponibilidad', ruta(async (req, res) => {
     const { data, error } = await supabase
         .from('prestamos')
@@ -874,6 +937,7 @@ app.get('/api/disponibilidad', ruta(async (req, res) => {
     res.json({ ocupados });
 }));
 
+// RUTA (solo admin): registra un nuevo instrumento (valida datos y sube la foto).
 app.post('/api/instrumentos', autenticar, soloAdmin, ruta(async (req, res) => {
     const nombre = String(req.body.nombre || '').trim();
 const tipo = String(req.body.tipo || '').trim();
@@ -914,6 +978,7 @@ if (!nombre || !tipo || !marca || !modelo || !numero_serie) {
     res.json({ mensaje: 'Registrado con éxito', id: data.id });
 }));
 
+// RUTA (solo admin): edita un instrumento.
 app.put('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -993,6 +1058,7 @@ app.put('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) =>
     res.json({ mensaje: 'Instrumento actualizado con éxito' });
 }));
 
+// RUTA (solo admin): elimina un instrumento.
 app.delete('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -1027,6 +1093,7 @@ app.delete('/api/instrumentos/:id', autenticar, soloAdmin, ruta(async (req, res)
 // =====================================================================
 //  RESERVAS VIRTUALES
 // =====================================================================
+// RUTA: crea una reserva virtual (valida fechas, solapes y pago del adelanto).
 app.post('/api/reservas', autenticar, ruta(async (req, res) => {
     const {
         instrumento_id, tipo_solicitante, clase_evento,
@@ -1088,6 +1155,7 @@ app.post('/api/reservas', autenticar, ruta(async (req, res) => {
     res.json({ mensaje: 'Reserva virtual enviada con éxito', id: data.id });
 }));
 
+// RUTA (solo admin): lista las solicitudes de reserva (la bandeja).
 app.get('/api/reservas', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data, error } = await supabase
         .from('reservas_virtuales')
@@ -1104,6 +1172,7 @@ app.get('/api/reservas', autenticar, soloAdmin, ruta(async (req, res) => {
     res.json(formateado);
 }));
 
+// RUTA: reservas del usuario con sesión.
 app.get('/api/mis-reservas', autenticar, ruta(async (req, res) => {
     const { data, error } = await supabase
         .from('reservas_virtuales')
@@ -1121,6 +1190,7 @@ app.get('/api/mis-reservas', autenticar, ruta(async (req, res) => {
     res.json(formateado);
 }));
 
+// RUTA: el cliente cancela su reserva.
 app.post('/api/mis-reservas/:id/cancelar', autenticar, ruta(async (req, res) => {
     const reservaId = Number(req.params.id);
     if (!Number.isInteger(reservaId) || reservaId <= 0) {
@@ -1192,6 +1262,7 @@ app.post('/api/mis-reservas/:id/cancelar', autenticar, ruta(async (req, res) => 
     });
 }));
 
+// RUTA (solo admin): acepta una reserva y crea el préstamo.
 app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data: reserva, error: errRes } = await supabase
         .from('reservas_virtuales')
@@ -1273,6 +1344,7 @@ app.post('/api/reservas/:id/aceptar', autenticar, soloAdmin, ruta(async (req, re
     });
 }));
 
+// RUTA (solo admin): rechaza una reserva.
 app.post('/api/reservas/:id/rechazar', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data: reserva } = await supabase
         .from('reservas_virtuales')
@@ -1297,6 +1369,7 @@ app.post('/api/reservas/:id/rechazar', autenticar, soloAdmin, ruta(async (req, r
 // =====================================================================
 //  PRÉSTAMOS Y DEVOLUCIONES
 // =====================================================================
+// RUTA (solo admin): lista los préstamos.
 app.get('/api/prestamos', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data, error } = await supabase
         .from('prestamos')
@@ -1320,6 +1393,7 @@ app.get('/api/prestamos', autenticar, soloAdmin, ruta(async (req, res) => {
 }));
 
 // Anula un préstamo activo o borra del registro uno ya devuelto/cancelado
+// RUTA (solo admin): anula un préstamo activo o borra uno ya cerrado.
 app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -1347,6 +1421,7 @@ app.delete('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) =>
     res.json({ ok: true, id, mensaje: 'Préstamo eliminado con éxito' });
 }));
 
+// RUTA (solo admin): elimina una reserva del registro.
 app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) {
@@ -1376,6 +1451,7 @@ app.delete('/api/reservas/:id', autenticar, soloAdmin, ruta(async (req, res) => 
     res.json({ mensaje: 'Reserva eliminada con éxito' });
 }));
 
+// RUTA (solo admin): detalle de un préstamo (acta).
 app.get('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data: prestamo, error } = await supabase
         .from('prestamos')
@@ -1393,6 +1469,7 @@ app.get('/api/prestamos/:id', autenticar, soloAdmin, ruta(async (req, res) => {
     });
 }));
 
+// RUTA (solo admin): registra un préstamo presencial con firma.
 app.post('/api/prestamos', autenticar, soloAdmin, ruta(async (req, res) => {
     const { instrumento_id, clase_evento, fecha_prestamo, fecha_devolucion_limite, firma_digital } = req.body;
     const solicitante = String(req.body.solicitante || '').trim();
@@ -1446,6 +1523,7 @@ app.post('/api/prestamos', autenticar, soloAdmin, ruta(async (req, res) => {
     res.json({ mensaje: 'Préstamo registrado', id: data.id });
 }));
 
+// RUTA (solo admin): calcula la multa estimada antes de confirmar la devolución.
 app.post('/api/prestamos/:id/previsualizar-multa', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data: prestamo } = await supabase
         .from('prestamos')
@@ -1458,6 +1536,7 @@ app.post('/api/prestamos/:id/previsualizar-multa', autenticar, soloAdmin, ruta(a
     res.json(calcularMulta(prestamo.fecha_devolucion_limite, fechaReal, req.body.nivel_dano));
 }));
 
+// RUTA (solo admin): confirma la devolución, guarda el estado final y la multa.
 app.put('/api/prestamos/:id/devolver', autenticar, soloAdmin, ruta(async (req, res) => {
     const { estado_fisico_retorno, nivel_dano } = req.body;
     const observaciones = String(req.body.observaciones || '').trim();
@@ -1514,6 +1593,7 @@ app.put('/api/prestamos/:id/devolver', autenticar, soloAdmin, ruta(async (req, r
 // =====================================================================
 //  QR DE PAGOS
 // =====================================================================
+// Archivos qr.png que se usan si el admin no subió ningún QR.
 const RUTAS_QR_POR_DEFECTO = [
     path.join(__dirname, 'frontend', 'qr.png'),
     path.join(__dirname, 'qr.png'),
@@ -1521,6 +1601,7 @@ const RUTAS_QR_POR_DEFECTO = [
 ];
 const archivoQrPorDefecto = () => RUTAS_QR_POR_DEFECTO.find((rutaArchivo) => fs.existsSync(rutaArchivo));
 
+// RUTA: indica si hay un QR de pagos disponible.
 app.get('/api/qr', ruta(async (req, res) => {
     const { data: fila } = await supabase
         .from('configuracion')
@@ -1530,6 +1611,7 @@ app.get('/api/qr', ruta(async (req, res) => {
     res.json({ existe: Boolean(fila || archivoQrPorDefecto()), subido: Boolean(fila) });
 }));
 
+// RUTA: entrega la imagen del QR.
 app.get('/api/qr/imagen', ruta(async (req, res) => {
     res.set('Cache-Control', 'no-store');
     const { data: fila } = await supabase
@@ -1549,6 +1631,7 @@ app.get('/api/qr/imagen', ruta(async (req, res) => {
     res.status(404).json({ error: 'Aún no hay un código QR configurado.' });
 }));
 
+// RUTA (solo admin): guarda el QR subido.
 app.put('/api/qr', autenticar, soloAdmin, ruta(async (req, res) => {
     const imagen = String(req.body.imagen || '');
     if (!/^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(imagen)) {
@@ -1564,6 +1647,7 @@ app.put('/api/qr', autenticar, soloAdmin, ruta(async (req, res) => {
     res.json({ mensaje: 'QR guardado' });
 }));
 
+// RUTA (solo admin): quita el QR subido.
 app.delete('/api/qr', autenticar, soloAdmin, ruta(async (req, res) => {
     const { error } = await supabase.from('configuracion').delete().eq('clave', 'qr_pago');
     if (error) throw error;
@@ -1575,6 +1659,7 @@ app.delete('/api/qr', autenticar, soloAdmin, ruta(async (req, res) => {
 // =====================================================================
 //  HISTORIAL Y VARIOS
 // =====================================================================
+// RUTA (solo admin): historial de movimientos.
 app.get('/api/historial', autenticar, soloAdmin, ruta(async (req, res) => {
     const { data, error } = await supabase
         .from('historial_movimientos')
@@ -1585,10 +1670,12 @@ app.get('/api/historial', autenticar, soloAdmin, ruta(async (req, res) => {
     res.json(data || []);
 }));
 
+// RUTA: comprueba que el servidor está funcionando.
 app.get('/api/estado', (req, res) => {
     res.json({ mensaje: 'El servidor y Supabase están funcionando 🎵', qr: true });
 });
 
+// RUTA: página principal, entrega index.html.
 app.get('/', (req, res) => {
     res.sendFile(path.join(DIR_PUBLICO, 'index.html'));
 });

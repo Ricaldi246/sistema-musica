@@ -1,20 +1,29 @@
+/* ARCHIVO: style.css
+   Contiene TODO el diseño: colores, tamaños, posiciones, animaciones y la versión para celular.
+   Secciones: 1) Lámpara y login  2) Sistema base y botones  3) Catálogo  4) Panel admin  5) Ventanas modales
+   6) Tema claro y decoración 3D  7) Escena navideña  8) Perfil y avatares  9) Temáticas por mes.
+   Sugerencia: usa Ctrl+F y busca el nombre de la clase que ves en index.html. */
+/* REGLA GENERAL: quita los espacios por defecto del navegador y hace que el ancho incluya el borde y el relleno. */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+/* Estilo base de toda la página: tipo de letra, color de texto (blanco) y color de fondo (#050505, casi negro). */
 :root {
   font-family: "Outfit", sans-serif;
   color: #fff;
   background: #050505;
 }
 
+/* La página ocupa todo el ancho y alto de la pantalla. */
 html, body {
   width: 100%;
   min-height: 100%;
 }
 
+/* Los botones y campos usan la misma tipografía de la página. */
 button, input, select, textarea {
   font: inherit;
 }
@@ -22,6 +31,11 @@ button, input, select, textarea {
 /* ===================== EFECTOS DE LA LÁMPARA Y SALA ===================== */
 /* Theme Spectrums */
 
+/* COLORES DE LA LÁMPARA (temas). Cada bloque [data-color="..."] redefine variables:
+   --lamp-accent = color principal (botón, aura)   --lamp-glow = brillo del bombillo
+   --beam-* = colores del haz de luz   --card-bg / --card-border = fondo y borde de la tarjeta de login
+   --text-* = colores de texto.  Este primero (AMBAR) es el tema por defecto.
+   Para cambiar el color de la luz, edita los valores hexadecimales (#rrggbb) o rgba(...). */
 :root,
 [data-color="amber"] {
   --lamp-accent: #ef941d;
@@ -44,6 +58,7 @@ button, input, select, textarea {
   --text-dim: #545c6b;
 }
 
+/* Tema CIAN. */
 [data-color="cyan"] {
   --lamp-accent: #00f0ff;
   --lamp-glow: #a6f9ff;
@@ -55,6 +70,7 @@ button, input, select, textarea {
   --lamp-focus-glow: rgba(0, 240, 255, 0.18);
 }
 
+/* Tema ROSA. */
 [data-color="rose"] {
   --lamp-accent: #ff3385;
   --lamp-glow: #ffa3c7;
@@ -66,6 +82,7 @@ button, input, select, textarea {
   --lamp-focus-glow: rgba(255, 51, 133, 0.18);
 }
 
+/* Tema MENTA (verde). */
 [data-color="mint"] {
   --lamp-accent: #00e676;
   --lamp-glow: #b9f6ca;
@@ -77,6 +94,7 @@ button, input, select, textarea {
   --lamp-focus-glow: rgba(0, 230, 118, 0.18);
 }
 
+/* Tema LUZ DE LUNA (blanco azulado). */
 [data-color="moonlight"] {
   --lamp-accent: #d8e5ff;
   --lamp-glow: #ffffff;
@@ -99,11 +117,13 @@ button, input, select, textarea {
 
 
 
+/* Cuando la lámpara está ENCENDIDA (data-on="true" en el body) el fondo se ilumina (--bg-illuminated). */
 body[data-on="true"] {
   background-color: var(--bg-illuminated);
 }
 
 /* Ambient Radial Glow on Room Wall */
+/* RESPLANDOR DE FONDO de la habitación (mancha de luz detrás de la lámpara). Para moverlo o cambiar su tamaño edita las propiedades de este bloque. */
 .ambient-glow {
   position: fixed;
   inset: 0;
@@ -119,6 +139,7 @@ body[data-on="true"]
   opacity: 0.85;
 }
 
+/* Lienzo de partículas de polvo (ocupa toda la pantalla, detrás de la lámpara). */
 #dustCanvas {
   position: fixed;
   inset: 0;
@@ -128,6 +149,8 @@ body[data-on="true"]
   z-index: 2;
 }
 
+/* POSICIÓN del panel de paleta + sonido: top: 24px (distancia al borde de arriba), right: 28px (distancia al borde derecho).
+   Cámbialos para mover el panel. */
 .quick-controls {
   position: fixed;
   top: 24px;
@@ -139,6 +162,7 @@ body[data-on="true"]
 }
 
 /* Minimal Color Palette */
+/* Cápsula de vidrio que contiene los circulitos de color. */
 .color-palette {
   display: flex;
   align-items: center;
@@ -151,6 +175,7 @@ body[data-on="true"]
   -webkit-backdrop-filter: blur(12px);
 }
 
+/* Cada circulito de color. width/height = tamaño (18px). Su color viene de --dot-color puesto en el HTML. */
 .color-dot-btn {
   width: 18px;
   height: 18px;
@@ -163,17 +188,20 @@ body[data-on="true"]
   outline: none;
 }
 
+/* Efecto al pasar el mouse por un circulito (crece y brilla). */
 .color-dot-btn:hover {
   transform: scale(1.22);
   box-shadow: 0 0 10px var(--dot-color);
 }
 
+/* Circulito del color seleccionado (más grande y con borde blanco). */
 .color-dot-btn.active {
   transform: scale(1.2);
   border-color: #fff;
   box-shadow: 0 0 12px var(--dot-color);
 }
 
+/* Botón redondo de sonido (42px). Cambia width/height para agrandarlo. */
 .sound-toggle {
   display: flex;
   align-items: center;
@@ -189,22 +217,26 @@ body[data-on="true"]
   backdrop-filter: blur(10px);
 }
 
+/* Efecto al pasar el mouse sobre el botón de sonido. */
 .sound-toggle:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   transform: scale(1.05);
 }
 
+/* Tamaño de los iconos de bocina. */
 .sound-icon {
   width: 18px;
   height: 18px;
 }
 
+/* Clase que OCULTA cualquier elemento (se usa para alternar entre icono de sonido y de silencio, etc.). */
 .hidden {
   display: none 
   !important;
 }
 
+/* Contenedor del login: centra lámpara y tarjeta. max-width = ancho máximo, gap = espacio entre la lámpara y la tarjeta. */
 .scene-container {
   min-height: 100vh;
   display: flex;
@@ -219,6 +251,7 @@ body[data-on="true"]
 }
 
 /* Lamp Stage */
+/* Columna de la lámpara (flex: tamaño base 420px). */
 .lamp-stage {
   flex: 1 1 420px;
   display: flex;
@@ -227,6 +260,7 @@ body[data-on="true"]
   position: relative;
 }
 
+/* TAMAÑO DE LA LÁMPARA: width: 400px y height: 520px. Cámbialos para hacerla más grande o pequeña. */
 .lamp-wrapper {
   position: relative;
   width: 400px;
@@ -236,6 +270,7 @@ body[data-on="true"]
   align-items: center;
 }
 
+/* El dibujo de la lámpara: sombra proyectada y punto de giro (transform-origin). */
 .lamp-svg {
   width: 100%;
   height: 100%;
@@ -249,6 +284,7 @@ body[data-on="true"]
   filter: drop-shadow(0 18px 38px rgba(0, 0, 0, 0.55));
 }
 
+/* Pantalla de la lámpara. Al encender (body[data-on="true"]) recibe un brillo del color de la paleta. */
 .lamp-shade-body {
   transition: filter 500ms ease;
 }
@@ -272,6 +308,7 @@ body[data-on="true"] .reflector-detail {
 }
 
 /* Volumetric Light Beam (Inside SVG) */
+/* HAZ DE LUZ: opacidad y animación (beam-bloom). Aquí se ajusta qué tan visible es la luz. */
 .svg-light-beam {
   opacity: 0;
   visibility: hidden;
@@ -300,10 +337,12 @@ body[data-on="true"] .svg-light-beam {
 }
 
 /* Shade Reflector States */
+/* Reflector de la pantalla APAGADA. */
 .shade-reflector-off {
   opacity: 1;
 }
 
+/* Reflector ENCENDIDO (invisible hasta que la lámpara se enciende). */
 .shade-reflector-on {
   opacity: 0;
   transition: opacity 0.35s ease;
@@ -314,6 +353,7 @@ body[data-on="true"] .shade-reflector-on {
 }
 
 /* Bulb Glow */
+/* Resplandor del bombillo (invisible hasta encender). */
 .bulb-glow-core {
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -350,6 +390,7 @@ body[data-on="true"] .bulb-glow-core {
   }
 }
 
+/* Filamento del bombillo (animación de parpadeo al encender: bulb-flicker-in). */
 .bulb-filament {
   stroke: #555;
   transition: stroke 0.3s ease, filter 0.3s ease;
@@ -363,6 +404,7 @@ body[data-on="true"] .bulb-glow-core {
   .svg-light-beam,
   .bulb-glow-core,
   .bead-aura,
+  /* Globito de ayuda "Jala la cuerda para encender": posición, color y forma. Se oculta al encender la lámpara. */
   .cord-tooltip {
     animation: none !important;
     transition-duration: .01ms !important;
@@ -375,6 +417,7 @@ body[data-on="true"] .bulb-filament {
 }
 
 /* Elastic String & Bead Handle */
+/* Cordón elástico: color y grosor. */
 .elastic-cord-path {
   transition: stroke 0.3s ease;
 }
@@ -384,6 +427,7 @@ body[data-on="true"] .elastic-cord-path {
   filter: drop-shadow(0 0 4px var(--lamp-accent));
 }
 
+/* Bolita del cordón (cursor de mano al pasar por encima). */
 .cord-bead-group {
   cursor: grab;
   touch-action: none;
@@ -393,6 +437,7 @@ body[data-on="true"] .elastic-cord-path {
   cursor: grabbing;
 }
 
+/* Aura brillante que rodea la bolita cuando la lámpara está encendida (animación pulseAura). */
 .bead-aura {
   transition: opacity 0.3s ease;
 }
@@ -443,6 +488,7 @@ body[data-on="true"] .cord-tooltip {
   pointer-events: none;
 }
 
+/* Flechita del globito de ayuda. */
 .tooltip-arrow {
   position: absolute;
   top: -5px;
@@ -468,6 +514,7 @@ body[data-on="true"] .cord-tooltip {
 }
 
 /* Form Stage */
+/* Zona del formulario (derecha del login). */
 .form-stage {
   flex: 1 1 420px;
   display: flex;
@@ -478,6 +525,8 @@ body[data-on="true"] .cord-tooltip {
 }
 
 /* Login Card */
+/* TARJETA DE LOGIN (estado apagado = oculta). max-width = ancho, border-radius = redondeo de esquinas,
+   padding = espacio interior, backdrop-filter = efecto de vidrio esmerilado. */
 .login-card {
   display: none;
   opacity: 0;
@@ -498,6 +547,7 @@ body[data-on="true"] .cord-tooltip {
   z-index: 10;
 }
 
+/* TARJETA DE LOGIN VISIBLE: se muestra cuando la lámpara está encendida; la sombra toma el color de la luz. */
 body[data-on="true"] .login-card {
   display: block;
   opacity: 1;
@@ -511,6 +561,7 @@ body[data-on="true"] .login-card {
 }
 
 /* OFF State Priority */
+/* Fuerza a que la tarjeta esté completamente oculta cuando la lámpara está apagada. */
 body[data-on="false"] .login-card {
   display: none !important;
   opacity: 0 !important;
@@ -542,10 +593,12 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Card Header */
+/* Cabecera de la tarjeta (título + subtítulo). */
 .card-header {
   margin-bottom: 1.6rem;
 }
 
+/* Título "Academia de Música": tamaño y color de letra. */
 .card-title {
   font-size: 1.8rem;
   font-weight: 800;
@@ -554,6 +607,7 @@ body[data-on="false"] .bulb-filament {
   margin-bottom: 0.35rem;
 }
 
+/* Subtítulo de la tarjeta. */
 .card-subtitle {
   font-size: 0.88rem;
   color: var(--text-muted);
@@ -561,6 +615,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Tabs: Sign In / Sign Up */
+/* Pestañas "Iniciar sesión" y "Registrarse". */
 .auth-tabs {
   position: relative;
   display: flex;
@@ -571,6 +626,7 @@ body[data-on="false"] .bulb-filament {
   margin-bottom: 1.6rem;
 }
 
+/* Cada pestaña (letra y color). */
 .auth-tab {
   flex: 1;
   background: transparent;
@@ -586,10 +642,12 @@ body[data-on="false"] .bulb-filament {
   text-align: center;
 }
 
+/* Pestaña seleccionada. */
 .auth-tab.active {
   color: #fff;
 }
 
+/* Barrita que se desliza bajo la pestaña activa. */
 .tab-slider {
   position: absolute;
   top: 4px;
@@ -608,6 +666,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Form Groups */
+/* Grupo etiqueta + campo del formulario de login. */
 .form-group {
   margin-bottom: 1.25rem;
 }
@@ -620,6 +679,7 @@ body[data-on="false"] .bulb-filament {
   margin-bottom: 0.45rem;
 }
 
+/* Fila con la etiqueta "Contraseña" y el enlace "¿Olvidaste tu contraseña?" a la derecha. */
 .label-row {
   display: flex;
   justify-content: space-between;
@@ -631,6 +691,7 @@ body[data-on="false"] .bulb-filament {
   margin-bottom: 0;
 }
 
+/* Estilo de los enlaces pequeños (olvidé contraseña / reenviar confirmación). */
 .forgot-link {
   font-size: 0.78rem;
   font-weight: 600;
@@ -644,6 +705,7 @@ body[data-on="false"] .bulb-filament {
   opacity: 0.85;
 }
 
+/* Caja de cada campo del login (borde, fondo, redondeo). */
 .input-wrapper {
   position: relative;
   display: flex;
@@ -665,6 +727,7 @@ body[data-on="false"] .bulb-filament {
   box-shadow: 0 0 0 3px var(--lamp-focus-glow);
 }
 
+/* Icono dentro del campo (persona / candado). */
 .field-icon {
   position: absolute;
   left: 15px;
@@ -679,6 +742,7 @@ body[data-on="false"] .bulb-filament {
   color: var(--lamp-accent);
 }
 
+/* El campo de texto en sí del login (letra, relleno). */
 .input-wrapper input {
   width: 100%;
   padding: 13px 42px 13px 44px;
@@ -696,6 +760,7 @@ body[data-on="false"] .bulb-filament {
   font-weight: 400;
 }
 
+/* Botón del ojito para ver la contraseña. */
 .eye-toggle {
   position: absolute;
   right: 14px;
@@ -720,6 +785,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Options */
+/* SIN USO ACTUAL: estilos de "Recordarme" (ya no está en el HTML). Se pueden dejar o borrar. */
 .options-row {
   margin-bottom: 1.4rem;
 }
@@ -773,6 +839,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Submit Button */
+/* BOTÓN "Iniciar sesión": degradado con los colores de la paleta, tamaño y bordes redondeados. */
 .submit-btn {
   position: relative;
   width: 100%;
@@ -793,6 +860,7 @@ body[data-on="false"] .bulb-filament {
   justify-content: center;
 }
 
+/* Efecto al pasar el mouse por el botón de login (sube un poco y brilla). */
 .submit-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 28px -5px rgba(0, 0, 0, 0.5), 0 0 25px rgba(255, 171, 61, 0.25);
@@ -802,6 +870,7 @@ body[data-on="false"] .bulb-filament {
   transform: translateY(0);
 }
 
+/* Capa de brillo interno del botón de login. */
 .btn-glow-layer {
   position: absolute;
   top: 0;
@@ -834,6 +903,7 @@ body[data-on="false"] .bulb-filament {
   transform: translateX(4px);
 }
 
+/* SIN USO ACTUAL: ruedita de carga (no aparece en el HTML). */
 .btn-spinner {
   width: 20px;
   height: 20px;
@@ -856,6 +926,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Divider & Socials */
+/* SIN USO ACTUAL: separador y botones de redes sociales (no están en el HTML). Puedes ignorarlos. */
 .auth-divider {
   display: flex;
   align-items: center;
@@ -908,6 +979,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Success Overlay */
+/* SIN USO ACTUAL: pantalla de éxito de una versión anterior del login. */
 .success-overlay {
   position: absolute;
   inset: 0;
@@ -993,6 +1065,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* Responsive */
+/* RESPONSIVE (tablet/celular): el login pasa a una sola columna y la lámpara se reduce. */
 @media (max-width: 960px) {
   .scene-container {
     flex-direction: column;
@@ -1022,6 +1095,7 @@ body[data-on="false"] .bulb-filament {
   }
 }
 
+/* RESPONSIVE (celular pequeño): ajustes extra de tamaño y espacios. */
 @media (max-width: 480px) {
   .scene-container {
     padding: 40px 1rem 1.5rem 1rem;
@@ -1038,6 +1112,7 @@ body[data-on="false"] .bulb-filament {
 }
 
 /* ===================== SISTEMA: BASE ===================== */
+/* ESTILO BASE de los campos del sistema (catálogo, admin y modales): relleno, borde gris, esquinas. */
 input, select, textarea {
   padding: 8px;
   margin-bottom: 10px;
@@ -1051,6 +1126,7 @@ input[type="checkbox"] {
   margin: 3px 0 0 0;
 }
 
+/* Etiquetas de los campos (tamaño de letra pequeño). */
 label {
   display: block;
   font-size: 0.9rem;
@@ -1059,6 +1135,7 @@ label {
 
 button { cursor: pointer; }
 
+/* Estilo de las tablas del admin (color de letra, bordes entre filas). */
 table { width: 100%; border-collapse: collapse; margin-top: 10px; color: #333; }
 th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; vertical-align: middle; }
 th { background: #f4f6f8; font-size: 0.85rem; }
@@ -1066,6 +1143,8 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .tabla-scroll { overflow-x: auto; }
 
 /* Botones */
+/* BOTONES DEL SISTEMA. Todos los botones .btn comparten forma. Los colores se definen por clase abajo:
+   .btn-primary naranja, .btn-success verde, .btn-danger rojo, .btn-dark azul oscuro, .btn-info azul, .btn-gray gris... */
 .btn {
   border: none;
   padding: 0.5rem 0.9rem;
@@ -1079,6 +1158,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .btn:disabled { background: #95a5a6; cursor: not-allowed; filter: none; }
 .btn-block { width: 100%; padding: 0.7rem; }
 .btn-sm { padding: 4px 8px; font-size: 0.8rem; }
+/* Colores de cada tipo de botón: cambia el código #... para cambiar el color de ese tipo en TODA la página. */
 .btn-primary { background: #e67e22; }
 .btn-success { background: #27ae60; }
 .btn-danger { background: #e74c3c; }
@@ -1090,6 +1170,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .btn-nav { margin-top: 15px; margin-bottom: 15px; background: #2c3e50; }
 
 /* ===================== CATÁLOGO ===================== */
+/* BARRA SUPERIOR del catálogo: color de fondo, relleno y orden de los elementos. (Más abajo hay otra regla que la modifica con colores más claros.) */
 .catalog-header {
   background-color: #2c3e50; color: white; padding: 1rem 2rem;
   display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
@@ -1104,14 +1185,17 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .catalog-title { text-align: center; margin-top: 2rem; padding: 0 1rem; }
 .catalog-title p { color: #aaa; }
 
+/* REJILLA de tarjetas: minmax(280px, 1fr) = ancho mínimo de cada tarjeta; gap = espacio entre tarjetas. */
 .catalog-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem;
   padding: 2rem; max-width: 1200px; margin: 0 auto;
 }
+/* TARJETA de cada instrumento: fondo blanco, esquinas, sombra. */
 .instrument-card {
   background: white; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   overflow: hidden; display: flex; flex-direction: column; color: #333;
 }
+/* FOTO del instrumento en la tarjeta: height: 180px es la altura de la foto. */
 .instrument-img {
   width: 100%; height: 180px; object-fit: cover; background: #eee;
   display: flex; align-items: center; justify-content: center; color: #888;
@@ -1122,11 +1206,13 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .catalogo-vacio { grid-column: 1 / -1; text-align: center; color: #aaa; }
 
 .badge { font-weight: bold; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+/* Etiquetas de estado: verde = disponible, rojo = ocupado, naranja = en reparación (badge-ok / badge-busy / badge-fix). */
 .badge-ok { color: #27ae60; background: #d4efdf; }
 .badge-busy { color: #c0392b; background: #fadbd8; }
 .badge-fix { color: #b9770e; background: #fdebd0; }
 
 /* ===================== ADMIN ===================== */
+/* BARRA SUPERIOR del panel admin (color naranja #e67e22). Cambia el color aquí. (Hay otra regla más abajo que la ajusta.) */
 .admin-bar {
   position: relative; z-index: 1500;
   background: #e67e22; color: white; padding: 0.75rem 2rem;
@@ -1134,18 +1220,23 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 }
 .admin-bar-left { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
 
+/* Contenedor central de los paneles del admin (ancho máximo y relleno). */
 .container-slider { padding: 2rem; max-width: 1200px; margin: 0 auto; }
 
+/* TARJETA BLANCA de cada panel del admin (fondo, relleno, sombra). */
 .card {
   background: white; padding: 2rem; border-radius: 8px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: #333;
 }
 .card h2 { margin-bottom: 1rem; }
 
+/* Los paneles del admin empiezan ocultos; el que tiene la clase "activo" se muestra. */
 .panel { display: none; }
 .panel.activo { display: block; }
 
+/* Vista previa de la foto al registrar/editar un instrumento. */
 .foto-previa { max-width: 160px; max-height: 120px; border-radius: 6px; margin-bottom: 10px; object-fit: cover; }
+/* Foto pequeña (48px) en la tabla de inventario. */
 .mini-foto { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; background: #eee; display: block; }
 .fila-estado { padding: 4px; margin: 0; width: auto; }
 
@@ -1155,6 +1246,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .firma-fila { margin: 10px 0; display: flex; gap: 15px; align-items: flex-start; flex-wrap: wrap; }
 .firma-col { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .firma-datos { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 8px; }
+/* Recuadro de la FIRMA DIGITAL (borde punteado, cursor de cruz). */
 #canvas-firma {
   border: 2px dashed #bbb; background: #fafafa; border-radius: 6px;
   max-width: 100%; touch-action: none; cursor: crosshair;
@@ -1162,21 +1254,25 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .check-conformidad { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 14px; font-size: 0.85rem; }
 
 /* Cronómetro */
+/* CRONÓMETRO de devoluciones: verde = a tiempo, rojo = con retraso, azul = pendiente. */
 .cronometro { font-weight: bold; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cronometro.ok { color: #27ae60; }
 .cronometro.retraso { color: #c0392b; }
 .cronometro.pendiente { color: #2980b9; }
 
 /* ===================== MODALES ===================== */
+/* FONDO OSCURO que cubre la pantalla cuando se abre una ventana emergente (modal). */
 .modal-overlay {
   display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; color: #333;
 }
+/* CAJA BLANCA de la ventana emergente: width: 480px = ancho; max-height: 90vh = alto máximo con scroll. */
 .modal-box {
   background: white; padding: 2rem; border-radius: 8px; width: 480px; max-width: 92%;
   box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;
 }
 .modal-box h3 { margin-bottom: 12px; }
+/* Variante más ancha (600px) usada por la bandeja del admin. */
 .modal-ancho { width: 600px; }
 
 .lista-scroll { margin: 15px 0; max-height: 400px; overflow-y: auto; }
@@ -1192,14 +1288,17 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .detalle-modal p { margin-bottom: 3px; }
 .solo-lectura { background: #eee; }
 
+/* Caja de pago dentro de la reserva (fondo gris azulado). */
 .pago-box { background: #eef2f7; padding: 10px; border-radius: 6px; margin: 10px 0; }
 .pago-box select { margin-bottom: 8px; }
 .pago-detalle { font-size: 0.85rem; color: #555; }
+/* SIN USO ACTUAL: recuadro de QR simulado (ahora se usa la imagen real). */
 .qr-simulado {
   width: 120px; height: 120px; margin: 8px auto 0; border: 2px dashed #888; border-radius: 6px;
   display: flex; align-items: center; justify-content: center; text-align: center; font-size: 0.75rem; color: #666; background: #fff;
 }
 
+/* Cuadro amarillo con el cálculo de la multa al devolver un instrumento. */
 .preview-multa { background: #fff8e1; border: 1px solid #f5d98b; border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 0.9rem; }
 .preview-multa p { margin-bottom: 3px; }
 .preview-multa .total { font-weight: bold; font-size: 1rem; color: #c0392b; margin-top: 6px; }
@@ -1207,18 +1306,21 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .acta-firma { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; margin-top: 6px; }
 
 /* ===================== MENÚ HAMBURGUESA (ADMIN) ===================== */
+/* Botón ☰ del menú del admin. */
 .btn-hamburguesa {
   background: rgba(0, 0, 0, 0.18); color: #fff; border: none; border-radius: 6px;
   font-size: 1.4rem; line-height: 1; padding: 0.35rem 0.7rem;
 }
 .btn-hamburguesa:hover { background: rgba(0, 0, 0, 0.3); }
 
+/* Título clicable de la barra del admin. */
 .btn-titulo-admin {
   background: none; border: none; color: #fff; font-weight: bold; font-size: 1rem;
   padding: 0.4rem 0.6rem; border-radius: 6px;
 }
 .btn-titulo-admin:hover { background: rgba(255, 255, 255, 0.2); }
 
+/* MENÚ DESPLEGABLE del admin: se oculta y aparece al agregar la clase "abierto". min-width = ancho del menú. */
 .menu-admin {
   display: none; position: absolute; top: 100%; left: 1rem; min-width: 310px;
   flex-direction: column; gap: 2px; padding: 6px;
@@ -1233,10 +1335,12 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .menu-admin button.activo { background: #e67e22; color: #fff; font-weight: 700; }
 
 /* ===================== AVISOS (TOAST, SE CIERRAN SOLOS) ===================== */
+/* POSICIÓN de los avisos: bottom: 20px; right: 20px (abajo a la derecha). Cámbialos para moverlos. */
 #toast-container {
   position: fixed; bottom: 20px; right: 20px; z-index: 3000;
   display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100vw - 40px));
 }
+/* Aviso individual (fondo, color, animación de entrada). */
 .toast {
   background: #2c3e50; color: #fff; padding: 12px 16px; border-radius: 8px;
   border-left: 5px solid #3498db; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
@@ -1255,6 +1359,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .tarj-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .tarj-marca { font-weight: 700; color: #2980b9; margin-left: 6px; }
 
+/* Imagen del QR dentro de la reserva (tamaño). */
 .qr-pago-img {
   display: block; width: 100%; max-width: 230px; margin: 8px auto;
   background: #fff; padding: 6px; border: 1px solid #ddd; border-radius: 8px;
@@ -1262,6 +1367,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .pago-detalle .btn-block { display: block; text-align: center; text-decoration: none; }
 
 .qr-admin-caja { text-align: center; margin-bottom: 10px; }
+/* Imagen del QR dentro del panel admin. */
 .qr-admin-img {
   display: block; width: 100%; max-width: 220px; margin: 0 auto 6px;
   background: #fff; padding: 6px; border: 1px solid #ddd; border-radius: 8px;
@@ -1272,6 +1378,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .qr-grande { display: block; width: min(80vw, 65vh); height: auto; margin: 10px auto; }
 
 /* ===================== AJUSTES PARA PANTALLAS CHICAS ===================== */
+/* RESPONSIVE (celular): ajustes de modales y botones en pantallas angostas. */
 @media (max-width: 700px) {
   .catalog-header, .admin-bar { padding: 0.75rem 1rem; }
   .container-slider { padding: 1rem; }
@@ -1285,6 +1392,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
    ===================================================================== */
 
 /* Fondo claro y animado detrás del contenido */
+/* FONDO ANIMADO detrás del catálogo y del admin (degradado suave que se mueve: fondoSuave). */
 .decoracion {
   position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
   background: linear-gradient(120deg, #fff4cc, #e3f2ff, #f3e8ff, #ffe9e0);
@@ -1301,6 +1409,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 #vista-catalogo > main, #vista-admin > .container-slider { position: relative; z-index: 1; }
 
 /* Notas musicales que suben girando en 3D */
+/* Notas musicales que suben girando por el fondo (animación subirNota/girarNota). */
 .nota-fondo {
   position: absolute; bottom: -70px; left: var(--x); font-size: var(--s); line-height: 1;
   color: var(--c); opacity: 0.7; perspective: 300px;
@@ -1356,11 +1465,13 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .card { border-radius: 14px; box-shadow: 0 10px 30px rgba(124, 92, 255, 0.14); }
 
 /* Portada 3D del catálogo */
+/* PORTADA del catálogo (contenedor del texto y las notas 3D). */
 .hero {
   display: flex; align-items: center; justify-content: center; gap: 2rem; flex-wrap: wrap;
   max-width: 1100px; margin: 1.5rem auto 0; padding: 1rem 2rem;
 }
 .hero-texto { flex: 1; min-width: 260px; }
+/* Título "Encuentra tu instrumento": tamaño y color. */
 .hero-texto h2 {
   font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 700; margin-bottom: 0.5rem;
   background: linear-gradient(90deg, #7c5cff, #ff6b6b 55%, #ffb142);
@@ -1369,6 +1480,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .hero-texto p { color: #4b5563; font-size: 1.05rem; }
 
 .ecualizador { display: flex; align-items: flex-end; gap: 5px; height: 36px; margin-top: 14px; }
+/* Cada barra del ecualizador animado (animación ecualizar). */
 .ecualizador i {
   display: block; width: 7px; height: 100%; border-radius: 4px; transform-origin: bottom;
   background: linear-gradient(to top, #7c5cff, #06b6d4);
@@ -1383,6 +1495,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 @keyframes ecualizar { from { transform: scaleY(0.15); } to { transform: scaleY(1); } }
 
 .escena-3d { position: relative; width: 320px; height: 230px; perspective: 900px; flex-shrink: 0; }
+/* Anillo 3D giratorio decorativo (animación girarAnillo). */
 .anillo-wrap {
   position: absolute; left: 50%; top: 50%; width: 0; height: 0;
   transform-style: preserve-3d; transform: rotateX(-14deg);
@@ -1398,6 +1511,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 }
 @keyframes girarAnillo { to { transform: rotateY(360deg); } }
 
+/* Notas musicales 3D flotantes de la portada; su color sale de --c definida en el HTML. */
 .nota-3d {
   position: absolute; font-size: 3.2rem; line-height: 1; color: var(--c); perspective: 400px;
   animation: flotar 4s ease-in-out infinite alternate;
@@ -1412,11 +1526,13 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 
 /* Tarjetas de instrumentos más vivas */
 .catalog-grid { perspective: 1000px; }
+/* Tarjetas más vivas: esquinas, sombras y borde de colores. */
 .instrument-card {
   border-radius: 16px; border-top: 5px solid var(--acento, #7c5cff);
   box-shadow: 0 8px 22px rgba(124, 92, 255, 0.16);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
+/* EFECTO al pasar el mouse por una tarjeta (se levanta y se agranda un poco). */
 .instrument-card:hover {
   transform: translateY(-8px) rotateX(4deg) rotateY(-3deg);
   box-shadow: 0 18px 34px rgba(124, 92, 255, 0.3);
@@ -1428,6 +1544,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .instrument-card:nth-child(6n+5) { --acento: #2ecc71; }
 .instrument-card:nth-child(6n+6) { --acento: #ff7eb6; }
 
+/* Cuando un instrumento no tiene foto se muestra su emoji con este fondo. */
 .instrument-img.sin-foto {
   background: linear-gradient(135deg, #ffeaa7, #fab1a0 45%, #a29bfe);
   font-size: 4.5rem;
@@ -1438,6 +1555,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 /* Ojito para ver la contraseña */
 .pass-wrap { position: relative; margin-bottom: 10px; }
 .pass-wrap input { display: block; margin-bottom: 0; padding-right: 44px; }
+/* Ojito para ver/ocultar contraseñas en los formularios del sistema (lo crea script.js: agregarBotonesOjo). */
 .ojo-btn {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%); z-index: 3;
   width: 32px; height: 32px; padding: 0; border: none; border-radius: 6px; background: none;
@@ -1551,6 +1669,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 }
 
 /* Capas de la escena */
+/* Capas de la escena navideña: todas ocupan la pantalla y se mueven con el efecto parallax. */
 .parallax-wrap {
   position: absolute; pointer-events: none;
   transform: translate3d(var(--px, 0px), var(--py, 0px), 0);
@@ -1590,11 +1709,13 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 .flake { position: absolute; top: -10px; background: #fff; border-radius: 50%; animation: snowfall var(--dur, 8s) linear infinite; }
 .star { position: absolute; background: #fef3c7; border-radius: 50%; animation: twinkle 3.2s ease-in-out infinite; }
 
+/* Animación de la nieve cayendo. */
 @keyframes snowfall {
   0%   { transform: translate3d(0, -5vh, 0); }
   50%  { transform: translate3d(18px, 50vh, 0); }
   100% { transform: translate3d(-10px, 108vh, 0); }
 }
+/* Animación del parpadeo de las estrellas. */
 @keyframes twinkle {
   0%, 100% { opacity: 0.25; transform: scale(0.85); }
   50%      { opacity: 0.95; transform: scale(1.2); }
@@ -1634,6 +1755,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 }
 
 /* ===================== PERFIL DE USUARIO Y AVATARES ===================== */
+/* Botón del usuario (avatar pequeño + nombre) en la barra del catálogo; abre el perfil. */
 .btn-usuario-perfil {
   background: rgba(255, 255, 255, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.35);
@@ -1652,6 +1774,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   transform: translateY(-1px);
 }
 
+/* Avatar pequeño redondo junto al nombre. */
 .perfil-mini-avatar {
   width: 22px;
   height: 22px;
@@ -1661,10 +1784,12 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
+/* Tamaño de la ventana de perfil. */
 .modal-perfil-box {
   max-width: 520px;
 }
 
+/* Parte superior del perfil: avatar grande + datos del usuario. */
 .perfil-cabecera {
   display: flex;
   align-items: center;
@@ -1677,6 +1802,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   flex-wrap: wrap;
 }
 
+/* Avatar grande del perfil (tamaño y borde). */
 .perfil-avatar-grande {
   width: 84px;
   height: 84px;
@@ -1703,6 +1829,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   margin-bottom: 14px;
 }
 
+/* Rejilla de los 10 avatares a elegir. */
 .perfil-grid-avatares {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1710,6 +1837,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   margin-top: 8px;
 }
 
+/* Cada avatar de la galería. */
 .avatar-opcion {
   border: 2px solid #e2e8f0;
   background: #f8f9fa;
@@ -1727,6 +1855,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   transform: translateY(-2px);
 }
 
+/* Avatar elegido (borde de color). */
 .avatar-opcion.seleccionado {
   border-color: #27ae60;
   background: #eafaf1;
@@ -1756,6 +1885,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 /* =====================================================================
    TEMÁTICAS ANIMADAS POR MES (mes-01 a mes-12; mes-12 = Navidad)
    ===================================================================== */
+/* Capa donde caen las partículas del mes (hojas, flores, corazones, etc.). */
 .mes-particulas {
   position: absolute;
   inset: 0;
@@ -1764,6 +1894,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   z-index: 15;
 }
 
+/* Cada partícula individual del mes. */
 .particula-mes {
   position: absolute;
   pointer-events: none;
@@ -1771,6 +1902,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 }
 
 /* Cuando NO es diciembre, ocultamos las capas estáticas navideñas y mostramos las del mes */
+/* Fuera de diciembre se ocultan los elementos navideños (nieve, pinos, trineo) y se usan los fondos de cada mes. */
 .decoracion:not(.mes-12) .layer-mountains,
 .decoracion:not(.mes-12) .layer-pines,
 .decoracion:not(.mes-12) .layer-houses,
@@ -1787,50 +1919,61 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 }
 
 /* Fondos de cada mes (1 a 11) */
+/* FONDO DE ENERO. Cada mes (mes-01 a mes-11) tiene su propio color/degradado; diciembre (mes-12) usa la escena navideña. Cambia los colores para personalizar un mes. */
 .decoracion.mes-01 {
   background: radial-gradient(circle at 50% 35%, #1e1b4b 0%, #0f172a 65%, #020617 100%);
 }
+/* Fondo de FEBRERO. */
 .decoracion.mes-02 {
   background: linear-gradient(135deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
   background-size: 300% 300%;
   animation: fondoSuave 16s ease infinite;
 }
+/* Fondo de MARZO. */
 .decoracion.mes-03 {
   background: linear-gradient(135deg, #d1fae5, #a7f3d0, #fef3c7, #e0f2fe);
   background-size: 300% 300%;
   animation: fondoSuave 20s ease infinite;
 }
+/* Fondo de ABRIL. */
 .decoracion.mes-04 {
   background: linear-gradient(135deg, #ffedd5, #fed7aa, #fde68a, #fae8ff);
   background-size: 300% 300%;
   animation: fondoSuave 20s ease infinite;
 }
+/* Fondo de MAYO. */
 .decoracion.mes-05 {
   background: linear-gradient(135deg, #fce7f3, #fbcfe8, #fef9c3, #e0e7ff);
   background-size: 300% 300%;
   animation: fondoSuave 20s ease infinite;
 }
+/* Fondo de JUNIO. */
 .decoracion.mes-06 {
   background: radial-gradient(circle at 50% 30%, #1d4ed8 0%, #0f172a 70%, #020617 100%);
 }
+/* Fondo de JULIO. */
 .decoracion.mes-07 {
   background: linear-gradient(135deg, #fee2e2, #fef3c7, #dcfce7, #ffedd5);
   background-size: 300% 300%;
   animation: fondoSuave 18s ease infinite;
 }
+/* Fondo de AGOSTO. */
 .decoracion.mes-08 {
   background: linear-gradient(135deg, #e0f2fe, #bae6fd, #fef9c3, #d1fae5);
   background-size: 300% 300%;
   animation: fondoSuave 18s ease infinite;
 }
+/* Fondo de SEPTIEMBRE. */
 .decoracion.mes-09 {
   background: linear-gradient(135deg, #dcfce7, #fef08a, #ffedd5, #e0f2fe);
   background-size: 300% 300%;
   animation: fondoSuave 18s ease infinite;
 }
+/* Fondo de OCTUBRE. */
 .decoracion.mes-10 {
   background: radial-gradient(circle at 50% 35%, #4c1d95 0%, #2e1065 65%, #1e1b4b 100%);
 }
+/* Fondo de NOVIEMBRE. */
 .decoracion.mes-11 {
   background: radial-gradient(circle at 50% 35%, #96391a 0%, #3b0764 68%, #09090b 100%);
 }
@@ -1877,6 +2020,7 @@ th { background: #f4f6f8; font-size: 0.85rem; }
 /* ===== Avatar con botón de cámara, selfie y credencial ===== */
 .perfil-avatar-wrap { position: relative; width: 84px; height: 84px; flex-shrink: 0; }
 .perfil-avatar-wrap .perfil-avatar-grande { display: block; }
+/* Botoncito de cámara 📷 sobre el avatar del perfil. */
 .btn-camara {
   position: absolute; right: -8px; bottom: -8px;
   width: 36px; height: 36px; padding: 0;
@@ -1887,12 +2031,14 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .btn-camara:hover { transform: scale(1.12); background: #5a4bd1; }
+/* Marco circular donde se ve la cámara para la selfie. */
 .camara-caja {
   position: relative; width: 100%; max-width: 320px; aspect-ratio: 1 / 1;
   margin: 0 auto 12px; border-radius: 50%; overflow: hidden;
   background: #111; border: 4px solid #6c5ce7;
 }
 .camara-caja video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+/* Tamaño de la imagen de la credencial en pantalla. */
 .credencial-vista {
   display: block; width: 100%; max-width: 300px; margin: 0 auto 14px;
   border-radius: 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
