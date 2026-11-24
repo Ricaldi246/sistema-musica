@@ -1390,6 +1390,8 @@ async function cargarCatalogo() {
 
             const card = document.createElement('div');
             card.className = 'instrument-card';
+            // Texto en el que busca el buscador: nombre, tipo, marca, modelo y serie (sin tildes ni mayúsculas)
+            card.dataset.busqueda = normalizarBusqueda([item.nombre, item.tipo, item.marca, item.modelo, item.numero_serie].join(' '));
             card.innerHTML = `
                 ${imagenHTML}
                 <div class="instrument-info">
@@ -1407,10 +1409,64 @@ async function cargarCatalogo() {
             `;
             grid.appendChild(card);
         });
+        // Si el usuario ya había escrito algo en el buscador, se vuelve a aplicar al recargar las tarjetas
+        aplicarFiltroCatalogo();
     } catch (err) {
         grid.innerHTML = `<p class="catalogo-vacio">No se pudo cargar el catálogo: ${esc(err.message)}</p>`;
     }
 }
+
+// BUSCADOR DEL CATÁLOGO: quita tildes y mayúsculas para que "Guitarra", "guitarra" y "GUITARRA" den el mismo resultado.
+function normalizarBusqueda(texto) {
+    return String(texto ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// Muestra solo las tarjetas que contienen TODAS las palabras escritas (ej. "guitarra yamaha").
+// Si no hay coincidencias, muestra un mensaje. Se ejecuta cada vez que el usuario escribe.
+function aplicarFiltroCatalogo() {
+    const grid = $('grid-instrumentos');
+    const input = $('buscador-catalogo');
+    if (!grid || !input) return;
+
+    const palabras = normalizarBusqueda(input.value).split(' ').filter(Boolean);
+    const btnLimpiar = $('buscador-limpiar');
+    if (btnLimpiar) btnLimpiar.hidden = palabras.length === 0;
+
+    const tarjetas = grid.querySelectorAll('.instrument-card');
+    let visibles = 0;
+    tarjetas.forEach((tarjeta) => {
+        const texto = tarjeta.dataset.busqueda || '';
+        const coincide = palabras.every((p) => texto.includes(p));
+        tarjeta.style.display = coincide ? '' : 'none';
+        if (coincide) visibles++;
+    });
+
+    let aviso = $('busqueda-sin-resultados');
+    if (tarjetas.length > 0 && visibles === 0) {
+        if (!aviso) {
+            aviso = document.createElement('p');
+            aviso.id = 'busqueda-sin-resultados';
+            aviso.className = 'catalogo-vacio';
+            grid.appendChild(aviso);
+        }
+        aviso.textContent = `No encontramos instrumentos que coincidan con "${input.value.trim()}".`;
+    } else if (aviso) {
+        aviso.remove();
+    }
+}
+
+// Botón "Borrar" del buscador: borra lo escrito y vuelve a mostrar todos los instrumentos.
+function limpiarBuscador() {
+    const input = $('buscador-catalogo');
+    if (!input) return;
+    input.value = '';
+    aplicarFiltroCatalogo();
+    input.focus();
+}
+
+// Conecta el campo de búsqueda: filtra mientras el usuario escribe.
+const inputBuscadorCatalogo = $('buscador-catalogo');
+if (inputBuscadorCatalogo) inputBuscadorCatalogo.addEventListener('input', aplicarFiltroCatalogo);
 
 // Botón "Reservar": si el usuario no inició sesión le pide entrar; si sí, abre la ventana de reserva con los datos del instrumento.
 function solicitarReserva(id) {

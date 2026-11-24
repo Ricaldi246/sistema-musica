@@ -2043,3 +2043,47 @@ th { background: #f4f6f8; font-size: 0.85rem; }
   display: block; width: 100%; max-width: 300px; margin: 0 auto 14px;
   border-radius: 14px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
+
+/* ===================== BUSCADOR DEL CATÁLOGO =====================
+   Campo de búsqueda debajo de "Encuentra tu instrumento" (sin iconos).
+   max-width = ancho máximo   border-radius = redondeo (999px = forma de píldora)
+   Colores: borde y brillo dorado (#ffd166) al hacer clic, igual que los detalles del catálogo.
+   El botón "Borrar" aparece a la derecha solo cuando hay texto escrito. */
+.buscador-catalogo {
+  position: relative;
+  max-width: 460px;
+  width: 100%;
+  margin-top: 18px;
+}
+.buscador-catalogo input {
+  width: 100%;
+  margin: 0;
+  padding: 13px 88px 13px 20px;
+  font-size: 1rem;
+  color: #2c3e50;
+  background: #fff;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(60, 0, 0, 0.35);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.buscador-catalogo input:focus {
+  border-color: #ffd166;
+  box-shadow: 0 6px 22px rgba(255, 209, 102, 0.55);
+}
+.buscador-limpiar {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 7px 14px;
+  border: none;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.buscador-limpiar:hover { background: #fecaca; }
+.buscador-limpiar[hidden] { display: none; }

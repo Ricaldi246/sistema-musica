@@ -352,6 +352,12 @@
                     <p>Reserva en línea el instrumento que necesitas para tus clases y eventos.</p>
                     <!-- Barritas animadas tipo ecualizador de música (solo decoración, 7 barras: cada <i> es una). -->
                     <div class="ecualizador" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                    <!-- BUSCADOR DE INSTRUMENTOS: el usuario escribe (ej. guitarra, piano, Yamaha) y las tarjetas del catálogo se filtran al instante.
+                         La lógica está en script.js (aplicarFiltroCatalogo) y el diseño en style.css (.buscador-catalogo). -->
+                    <div class="buscador-catalogo">
+                        <input type="text" id="buscador-catalogo" placeholder="Buscar instrumento (ej. guitarra, piano, Yamaha...)" autocomplete="off" aria-label="Buscar instrumento">
+                        <button type="button" id="buscador-limpiar" class="buscador-limpiar" onclick="limpiarBuscador()" aria-label="Borrar búsqueda" hidden>Borrar</button>
+                    </div>
                 </div>
                 <!-- Notas musicales flotantes en 3D (n1, n2, n3). Cada una usa style="–c: color" para su color. -->
                 <div class="escena-3d" aria-hidden="true">
